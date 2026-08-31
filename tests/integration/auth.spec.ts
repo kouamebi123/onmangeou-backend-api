@@ -34,15 +34,9 @@ describe('authentification par OTP', () => {
   it('cree le compte a la premiere connexion verifiee', async () => {
     const phone = nextPhone();
 
-    const requested = await context
-      .http()
-      .post('/api/v1/auth/otp/request')
-      .send({ phone })
-      .expect(202);
+    const requested = await context.http().post('/api/v1/auth/otp/request').send({ phone }).expect(202);
 
-    const challenge = payloadOf<{ challengeId: string; devCode?: string; expiresAt: string }>(
-      requested.body,
-    );
+    const challenge = payloadOf<{ challengeId: string; devCode?: string; expiresAt: string }>(requested.body);
 
     expect(challenge.challengeId).toBeTruthy();
     expect(challenge.devCode).toMatch(/^\d{6}$/);
@@ -74,11 +68,7 @@ describe('authentification par OTP', () => {
   it('ne stocke jamais le code en clair', async () => {
     const phone = nextPhone();
 
-    const requested = await context
-      .http()
-      .post('/api/v1/auth/otp/request')
-      .send({ phone })
-      .expect(202);
+    const requested = await context.http().post('/api/v1/auth/otp/request').send({ phone }).expect(202);
 
     const challenge = payloadOf<{ devCode: string }>(requested.body);
 
@@ -112,21 +102,13 @@ describe('authentification par OTP', () => {
   it('bloque le defi apres le nombre maximal de tentatives', async () => {
     const phone = nextPhone();
 
-    const requested = await context
-      .http()
-      .post('/api/v1/auth/otp/request')
-      .send({ phone })
-      .expect(202);
+    const requested = await context.http().post('/api/v1/auth/otp/request').send({ phone }).expect(202);
 
     const challenge = payloadOf<{ devCode: string }>(requested.body);
     const maxAttempts = Number(process.env['OTP_MAX_ATTEMPTS'] ?? 5);
 
     for (let attempt = 1; attempt < maxAttempts; attempt += 1) {
-      await context
-        .http()
-        .post('/api/v1/auth/otp/verify')
-        .send({ phone, code: '000000' })
-        .expect(401);
+      await context.http().post('/api/v1/auth/otp/verify').send({ phone, code: '000000' }).expect(401);
     }
 
     // La derniere tentative verrouille le defi et l'annonce explicitement.
@@ -140,11 +122,7 @@ describe('authentification par OTP', () => {
 
     // Le bon code ne sauve plus le defi : sinon un attaquant disposerait d'un
     // nombre illimite d'essais en alternant les codes.
-    await context
-      .http()
-      .post('/api/v1/auth/otp/verify')
-      .send({ phone, code: challenge.devCode })
-      .expect(401);
+    await context.http().post('/api/v1/auth/otp/verify').send({ phone, code: challenge.devCode }).expect(401);
 
     const stored = await context.prisma.otpChallenge.findFirstOrThrow({
       select: { status: true, attempts: true },
@@ -188,11 +166,7 @@ describe('authentification par OTP', () => {
     const user = await authenticate(context);
     const tampered = `${user.accessToken.slice(0, -4)}AAAA`;
 
-    await context
-      .http()
-      .get('/api/v1/me')
-      .set('Authorization', `Bearer ${tampered}`)
-      .expect(401);
+    await context.http().get('/api/v1/me').set('Authorization', `Bearer ${tampered}`).expect(401);
   });
 
   it('renvoie le profil du porteur du jeton', async () => {
@@ -204,9 +178,7 @@ describe('authentification par OTP', () => {
       .set('Authorization', `Bearer ${user.accessToken}`)
       .expect(200);
 
-    const profile = payloadOf<{ id: string; phoneE164: string; phoneVerified: boolean }>(
-      response.body,
-    );
+    const profile = payloadOf<{ id: string; phoneE164: string; phoneVerified: boolean }>(response.body);
 
     expect(profile.id).toBe(user.userId);
     expect(profile.phoneE164).toBe(`+225${user.phone}`);
@@ -216,11 +188,7 @@ describe('authentification par OTP', () => {
   it('propage l identifiant de requete dans la reponse et l enveloppe', async () => {
     const requestId = '11111111-2222-3333-4444-555555555555';
 
-    const response = await context
-      .http()
-      .get('/health/live')
-      .set('x-request-id', requestId)
-      .expect(200);
+    const response = await context.http().get('/health/live').set('x-request-id', requestId).expect(200);
 
     expect(response.headers['x-request-id']).toBe(requestId);
   });
@@ -255,11 +223,7 @@ describe('rotation des refresh tokens', () => {
     expect(tokens.refreshToken).not.toBe(user.refreshToken);
 
     // Rejeu de l'ancien jeton : il doit etre refuse.
-    await context
-      .http()
-      .post('/api/v1/auth/refresh')
-      .send({ refreshToken: user.refreshToken })
-      .expect(401);
+    await context.http().post('/api/v1/auth/refresh').send({ refreshToken: user.refreshToken }).expect(401);
   });
 
   it('revoque toute la famille de sessions apres un rejeu detecte', async () => {
@@ -276,11 +240,7 @@ describe('rotation des refresh tokens', () => {
 
     const rotated = payloadOf<{ refreshToken: string; accessToken: string }>(refreshed.body);
 
-    await context
-      .http()
-      .post('/api/v1/auth/refresh')
-      .send({ refreshToken: user.refreshToken })
-      .expect(401);
+    await context.http().post('/api/v1/auth/refresh').send({ refreshToken: user.refreshToken }).expect(401);
 
     await context
       .http()
@@ -302,11 +262,7 @@ describe('rotation des refresh tokens', () => {
       .send({})
       .expect(204);
 
-    await context
-      .http()
-      .post('/api/v1/auth/refresh')
-      .send({ refreshToken: user.refreshToken })
-      .expect(401);
+    await context.http().post('/api/v1/auth/refresh').send({ refreshToken: user.refreshToken }).expect(401);
   });
 
   it('liste les sessions actives et marque la session courante', async () => {

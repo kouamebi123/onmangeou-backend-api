@@ -1,4 +1,17 @@
-import { Body, Controller, Get, HttpCode, HttpStatus, Param, ParseUUIDPipe, Patch, Post, Put, Query, Req } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  HttpCode,
+  HttpStatus,
+  Param,
+  ParseUUIDPipe,
+  Patch,
+  Post,
+  Put,
+  Query,
+  Req,
+} from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { CurrentActor, PublicRoute, RequirePermissions } from '../../common/auth/auth.decorators';
 import type { AuthenticatedActor } from '../../common/auth/authenticated-actor';
@@ -116,9 +129,9 @@ export class MerchantController {
   @RequirePermissions(PERMISSIONS.ESTABLISHMENT_HOURS_WRITE)
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({
-    summary: 'Remplacer la grille d\'horaires',
+    summary: "Remplacer la grille d'horaires",
     description:
-      "Les horaires sont exprimes en minutes depuis minuit, heure locale. Une fermeture apres minuit se note au-dela de 1440 : 02:00 vaut 1560.",
+      'Les horaires sont exprimes en minutes depuis minuit, heure locale. Une fermeture apres minuit se note au-dela de 1440 : 02:00 vaut 1560.',
   })
   async replaceHours(
     @CurrentActor() actor: AuthenticatedActor,
@@ -187,7 +200,7 @@ export class MerchantController {
   @ApiOperation({
     summary: 'Consulter les modules actifs',
     description:
-      "Le client construit sa navigation depuis cette reponse et ne code aucune offre commerciale en dur.",
+      'Le client construit sa navigation depuis cette reponse et ne code aucune offre commerciale en dur.',
   })
   async getEntitlements(
     @CurrentActor() actor: AuthenticatedActor,
@@ -216,7 +229,11 @@ export class MerchantController {
   @Put('modules')
   @RequirePermissions(PERMISSIONS.ORGANIZATION_WRITE)
   @ApiOperation({ summary: 'Activer ou desactiver les modules de mon etablissement' })
-  async setModules(@CurrentActor() actor: AuthenticatedActor, @Body() dto: SetMerchantModulesDto, @Req() request: AppRequest) {
+  async setModules(
+    @CurrentActor() actor: AuthenticatedActor,
+    @Body() dto: SetMerchantModulesDto,
+    @Req() request: AppRequest,
+  ) {
     return this.entitlements.setOwnerModules(actor, dto.modules, { requestId: request.requestId });
   }
 

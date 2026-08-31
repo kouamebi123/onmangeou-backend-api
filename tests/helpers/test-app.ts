@@ -93,9 +93,7 @@ export async function resetDatabase(prisma: PrismaService): Promise<void> {
       AND tablename NOT LIKE 'spatial_ref_sys'
   `;
 
-  const truncatable = tables
-    .map((row) => row.tablename)
-    .filter((name) => !REFERENCE_TABLES.includes(name));
+  const truncatable = tables.map((row) => row.tablename).filter((name) => !REFERENCE_TABLES.includes(name));
 
   if (truncatable.length === 0) {
     return;

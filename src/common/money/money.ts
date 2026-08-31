@@ -108,7 +108,9 @@ export function applyDiscountBasisPoints(amount: bigint, basisPoints: number): b
   assertValidAmount(amount, 'montant remise');
 
   if (!Number.isInteger(basisPoints) || basisPoints < 0 || basisPoints > 10_000) {
-    throw new MoneyError(`La remise doit etre exprimee entre 0 et 10000 points de base, recu : ${basisPoints}`);
+    throw new MoneyError(
+      `La remise doit etre exprimee entre 0 et 10000 points de base, recu : ${basisPoints}`,
+    );
   }
 
   const scaledDiscount = amount * BigInt(basisPoints);

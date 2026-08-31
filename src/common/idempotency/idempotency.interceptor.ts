@@ -57,7 +57,7 @@ export class IdempotencyInterceptor implements NestInterceptor {
       return throwError(
         () =>
           new DomainError('VALIDATION_FAILED', `En-tete ${IDEMPOTENCY_KEY_HEADER} absente`, {
-            publicDetail: 'Cette action necessite un identifiant de demande. Reessayez depuis l\'application.',
+            publicDetail: "Cette action necessite un identifiant de demande. Reessayez depuis l'application.",
             fields: [
               {
                 field: IDEMPOTENCY_KEY_HEADER,
@@ -193,11 +193,7 @@ export class IdempotencyInterceptor implements NestInterceptor {
 }
 
 function isUniqueViolation(error: unknown): boolean {
-  return (
-    typeof error === 'object' &&
-    error !== null &&
-    (error as { code?: unknown }).code === 'P2002'
-  );
+  return typeof error === 'object' && error !== null && (error as { code?: unknown }).code === 'P2002';
 }
 
 /**
@@ -211,8 +207,6 @@ function toJsonValue(payload: unknown): Prisma.InputJsonValue | typeof Prisma.Db
   }
 
   return JSON.parse(
-    JSON.stringify(payload, (_key, value: unknown) =>
-      typeof value === 'bigint' ? value.toString() : value,
-    ),
+    JSON.stringify(payload, (_key, value: unknown) => (typeof value === 'bigint' ? value.toString() : value)),
   ) as Prisma.InputJsonValue;
 }

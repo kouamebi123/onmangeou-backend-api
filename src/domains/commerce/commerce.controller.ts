@@ -43,7 +43,10 @@ export class CommerceController {
   }
 
   @Post('payments/intents/:id/confirm')
-  async confirmIntent(@CurrentActor() actor: AuthenticatedActor, @Param('id', ParseUUIDPipe) intentId: string) {
+  async confirmIntent(
+    @CurrentActor() actor: AuthenticatedActor,
+    @Param('id', ParseUUIDPipe) intentId: string,
+  ) {
     return this.commerce.confirmSandboxIntent(actor, intentId);
   }
 
@@ -69,7 +72,10 @@ export class CommerceController {
   }
 
   @Post('follows/:restaurantId/unfollow')
-  async unfollow(@CurrentActor() actor: AuthenticatedActor, @Param('restaurantId', ParseUUIDPipe) id: string) {
+  async unfollow(
+    @CurrentActor() actor: AuthenticatedActor,
+    @Param('restaurantId', ParseUUIDPipe) id: string,
+  ) {
     return this.commerce.follow(actor, id, false);
   }
 

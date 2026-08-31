@@ -62,7 +62,7 @@ async function main(): Promise<void> {
         }
       }
     } catch (error) {
-      logger.error('Echec de lecture de l\'outbox', {
+      logger.error("Echec de lecture de l'outbox", {
         detail: error instanceof Error ? error.message : undefined,
       });
     }

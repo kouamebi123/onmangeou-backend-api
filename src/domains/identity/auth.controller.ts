@@ -206,7 +206,7 @@ export class AuthController {
   }
 
   @Get('sessions')
-  @ApiOperation({ summary: 'Lister les sessions actives, revocables par l\'utilisateur' })
+  @ApiOperation({ summary: "Lister les sessions actives, revocables par l'utilisateur" })
   async listSessions(@CurrentActor() actor: AuthenticatedActor): Promise<SessionResponse[]> {
     const sessions = await this.sessions.listActiveSessions(actor.userId);
 
@@ -237,10 +237,7 @@ export class MeController {
 
   @Patch()
   @ApiOperation({ summary: 'Mettre a jour mon profil' })
-  async update(
-    @CurrentActor() actor: AuthenticatedActor,
-    @Body() dto: UpdateMeDto,
-  ): Promise<MeResponse> {
+  async update(@CurrentActor() actor: AuthenticatedActor, @Body() dto: UpdateMeDto): Promise<MeResponse> {
     return toMeResponse(await this.identity.updateProfile(actor.userId, dto));
   }
 

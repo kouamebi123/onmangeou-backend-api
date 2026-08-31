@@ -10,19 +10,19 @@ export class OtpRequestedResponse {
   expiresInSeconds!: number;
   @ApiPropertyOptional({
     description:
-      "Code renvoye uniquement en developpement local, lorsque OTP_DEV_ECHO_CODE est actif. Toujours absent en staging et en production.",
+      'Code renvoye uniquement en developpement local, lorsque OTP_DEV_ECHO_CODE est actif. Toujours absent en staging et en production.',
   })
   devCode?: string;
 }
 
 export class TokenPairResponse {
   @ApiProperty() accessToken!: string;
-  @ApiProperty({ description: 'Expiration de l\'access token, en UTC ISO 8601.' })
+  @ApiProperty({ description: "Expiration de l'access token, en UTC ISO 8601." })
   accessTokenExpiresAt!: string;
   @ApiProperty() refreshToken!: string;
   @ApiProperty() refreshTokenExpiresAt!: string;
   @ApiProperty() sessionId!: string;
-  @ApiProperty({ description: 'Vrai si le compte vient d\'etre cree.' })
+  @ApiProperty({ description: "Vrai si le compte vient d'etre cree." })
   accountCreated!: boolean;
 }
 

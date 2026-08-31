@@ -155,8 +155,8 @@ async function seedDemoData(prisma: PrismaClient): Promise<void> {
       district: 'Cocody Angre',
       addressLine: 'Rue L124, Angre 8e tranche',
       landmarkText: 'Face a la pharmacie Saint Jean, apres le carrefour des Deux Plateaux',
-      latitude: 5.3900,
-      longitude: -3.9800,
+      latitude: 5.39,
+      longitude: -3.98,
       averagePreparationMinutes: 20,
       stockMode: 'SIMPLE',
       publishedAt: now,
@@ -234,7 +234,7 @@ async function seedDemoData(prisma: PrismaClient): Promise<void> {
       name: 'Poulet braise entier',
       category: 'Grillades',
       amount: 6000n,
-      description: 'Poulet braise au feu de bois, accompagne d\'attieke et de piment vert.',
+      description: "Poulet braise au feu de bois, accompagne d'attieke et de piment vert.",
       halal: true,
       spicyLevel: 2,
     },
@@ -266,7 +266,7 @@ async function seedDemoData(prisma: PrismaClient): Promise<void> {
       name: 'Bissap maison',
       category: 'Boissons',
       amount: 500n,
-      description: 'Infusion d\'hibiscus fraiche, peu sucree.',
+      description: "Infusion d'hibiscus fraiche, peu sucree.",
       vegetarian: true,
     },
   ];
@@ -318,12 +318,12 @@ async function seedDemoData(prisma: PrismaClient): Promise<void> {
       name: 'Maquis du Plateau',
       slug: 'maquis-du-plateau-centre',
       status: 'PUBLISHED',
-      description: 'Maquis de nuit : grillades et ambiance jusqu\'au petit matin.',
+      description: "Maquis de nuit : grillades et ambiance jusqu'au petit matin.",
       city: 'Abidjan',
       district: 'Plateau',
       landmarkText: 'Derriere la cathedrale Saint-Paul',
-      latitude: 5.3200,
-      longitude: -4.0200,
+      latitude: 5.32,
+      longitude: -4.02,
       publishedAt: now,
       verifiedAt: now,
       hours: {
@@ -340,8 +340,6 @@ async function seedDemoData(prisma: PrismaClient): Promise<void> {
 }
 
 void main().catch((error: unknown) => {
-  process.stderr.write(
-    `Echec du seed OnMangeOu : ${error instanceof Error ? error.stack : String(error)}\n`,
-  );
+  process.stderr.write(`Echec du seed OnMangeOu : ${error instanceof Error ? error.stack : String(error)}\n`);
   process.exitCode = 1;
 });

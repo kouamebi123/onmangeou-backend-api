@@ -6,11 +6,7 @@ import { DomainError } from '../errors/domain.error';
 import type { AppRequest } from '../http/request-context';
 import { APP_LOGGER, type AppLogger } from '../logging/app-logger';
 import { RedisService } from '../../infrastructure/redis/redis.service';
-import {
-  RATE_LIMIT_METADATA,
-  type RateLimitOptions,
-  type RateLimitRule,
-} from './rate-limit.decorator';
+import { RATE_LIMIT_METADATA, type RateLimitOptions, type RateLimitRule } from './rate-limit.decorator';
 
 /**
  * Limitation de debit adossee a Redis (specification section 10.1).

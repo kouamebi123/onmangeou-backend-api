@@ -7,12 +7,7 @@ import {
   resetRedis,
   type TestContext,
 } from '../helpers/test-app';
-import {
-  authenticate,
-  createEstablishment,
-  createMerchant,
-  idempotencyKey,
-} from '../helpers/fixtures';
+import { authenticate, createEstablishment, createMerchant, idempotencyKey } from '../helpers/fixtures';
 
 describe('administration plateforme', () => {
   let context: TestContext;
@@ -135,7 +130,9 @@ describe('administration plateforme', () => {
 
     expect(payload.published).toBe(true);
     expect(payload.notice).toBe('Barème officiel publié depuis le back-office.');
-    expect(payload.modules.find((item) => item.code === 'orders.marketplace')?.monthlyPrice.amount).toBe('8000');
+    expect(payload.modules.find((item) => item.code === 'orders.marketplace')?.monthlyPrice.amount).toBe(
+      '8000',
+    );
     expect(payload).not.toHaveProperty('sandbox');
   });
 });

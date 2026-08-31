@@ -70,7 +70,9 @@ describe('computeOpeningStatus', () => {
   });
 
   it('une fermeture exceptionnelle prime sur la grille hebdomadaire', () => {
-    const exceptions: HoursException[] = [{ dateKey: '2026-08-28', closed: true, opensAtMinutes: null, closesAtMinutes: null }];
+    const exceptions: HoursException[] = [
+      { dateKey: '2026-08-28', closed: true, opensAtMinutes: null, closesAtMinutes: null },
+    ];
 
     const status = computeOpeningStatus(new Date('2026-08-28T20:00:00Z'), nightSlots, exceptions);
 
@@ -90,7 +92,9 @@ describe('computeOpeningStatus', () => {
   });
 
   it('ignore une exception portant sur une autre date', () => {
-    const exceptions: HoursException[] = [{ dateKey: '2026-12-25', closed: true, opensAtMinutes: null, closesAtMinutes: null }];
+    const exceptions: HoursException[] = [
+      { dateKey: '2026-12-25', closed: true, opensAtMinutes: null, closesAtMinutes: null },
+    ];
 
     expect(computeOpeningStatus(new Date('2026-08-28T20:00:00Z'), nightSlots, exceptions).open).toBe(true);
   });

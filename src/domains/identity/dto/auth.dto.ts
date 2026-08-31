@@ -32,7 +32,7 @@ export class RequestOtpDto {
   phone!: string;
 
   @ApiPropertyOptional({
-    description: "Finalite du code. LOGIN par defaut.",
+    description: 'Finalite du code. LOGIN par defaut.',
     enum: ['LOGIN', 'PHONE_VERIFICATION'],
     default: 'LOGIN',
   })
@@ -114,7 +114,7 @@ export class RefreshTokenDto {
   @MaxLength(256)
   refreshToken!: string;
 
-  @ApiPropertyOptional({ description: "Organisation a activer sur la nouvelle session." })
+  @ApiPropertyOptional({ description: 'Organisation a activer sur la nouvelle session.' })
   @IsOptional()
   @IsUUID()
   organizationId?: string;
@@ -161,7 +161,7 @@ export class UpdateMeDto {
 }
 
 export class DeleteMeDto {
-  @ApiProperty({ description: 'Motif conserve dans le journal d\'audit.', maxLength: 300 })
+  @ApiProperty({ description: "Motif conserve dans le journal d'audit.", maxLength: 300 })
   @IsString()
   @IsNotEmpty()
   @MaxLength(300)

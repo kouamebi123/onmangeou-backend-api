@@ -23,7 +23,7 @@ export class DecideVerificationDto {
 
   @ApiProperty({
     maxLength: 1000,
-    description: 'Motif conserve dans le journal d\'audit et le dossier.',
+    description: "Motif conserve dans le journal d'audit et le dossier.",
   })
   @IsString()
   @IsNotEmpty()

@@ -78,9 +78,7 @@ export class EntitlementsService {
       orderBy: { effectiveFrom: 'asc' },
     });
 
-    const planModules = new Set<string>(
-      subscription?.plan.modules.map((entry) => entry.moduleCode) ?? [],
-    );
+    const planModules = new Set<string>(subscription?.plan.modules.map((entry) => entry.moduleCode) ?? []);
 
     const subscriptionUsable = subscription !== null && this.isSubscriptionUsable(subscription.status);
 
@@ -107,7 +105,9 @@ export class EntitlementsService {
           source:
             override !== undefined
               ? ('override' as const)
-              : (subscriptionUsable && planModules.has(code) ? ('plan' as const) : ('none' as const)),
+              : subscriptionUsable && planModules.has(code)
+                ? ('plan' as const)
+                : ('none' as const),
         };
       }
 
@@ -180,15 +180,23 @@ export class EntitlementsService {
 
     for (const entry of payload.modules) {
       if (!known.has(entry.code)) {
-        throw validationFailed([{ field: 'modules', code: 'invalid', message: `Module inconnu : ${entry.code}` }]);
+        throw validationFailed([
+          { field: 'modules', code: 'invalid', message: `Module inconnu : ${entry.code}` },
+        ]);
       }
       if (!Number.isInteger(entry.monthlyPriceAmount) || entry.monthlyPriceAmount < 0) {
         throw validationFailed([
-          { field: 'modules', code: 'invalid', message: 'Le prix mensuel doit être un entier FCFA positif ou nul.' },
+          {
+            field: 'modules',
+            code: 'invalid',
+            message: 'Le prix mensuel doit être un entier FCFA positif ou nul.',
+          },
         ]);
       }
       if (seen.has(entry.code)) {
-        throw validationFailed([{ field: 'modules', code: 'duplicate', message: `Module en double : ${entry.code}` }]);
+        throw validationFailed([
+          { field: 'modules', code: 'duplicate', message: `Module en double : ${entry.code}` },
+        ]);
       }
       seen.add(entry.code);
     }
@@ -251,9 +259,7 @@ export class EntitlementsService {
   }
 
   private async loadBillingSettings(): Promise<{ currency: string; published: boolean; notice: string }> {
-    const rows = await this.prisma.$queryRaw<
-      Array<{ currency: string; published: boolean; notice: string }>
-    >`
+    const rows = await this.prisma.$queryRaw<Array<{ currency: string; published: boolean; notice: string }>>`
       SELECT currency, published, notice FROM platform_billing WHERE id = 1 LIMIT 1
     `;
     const row = rows[0];
@@ -280,7 +286,9 @@ export class EntitlementsService {
     const known = new Set<string>(ALL_MODULE_CODES);
     for (const entry of modules) {
       if (!known.has(entry.code)) {
-        throw validationFailed([{ field: 'modules', code: 'invalid', message: `Module inconnu : ${entry.code}` }]);
+        throw validationFailed([
+          { field: 'modules', code: 'invalid', message: `Module inconnu : ${entry.code}` },
+        ]);
       }
       if (entry.code === MODULE_CODES.STOREFRONT_BASIC && !entry.enabled) {
         throw validationFailed([

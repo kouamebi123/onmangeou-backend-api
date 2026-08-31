@@ -13,15 +13,15 @@ export function buildOpenApiDocument(app: INestApplication): OpenAPIObject {
     .setTitle('OnMangeOu API')
     .setDescription(
       [
-        'API de la plateforme OnMangeOu : decouverte de restaurants et gestion d\'etablissement en Cote d\'Ivoire.',
+        "API de la plateforme OnMangeOu : decouverte de restaurants et gestion d'etablissement en Cote d'Ivoire.",
         '',
         'Conventions transverses :',
         '- Toutes les reponses de succes utilisent l\'enveloppe `{ "data": ..., "meta": { "requestId", "nextCursor" } }`.',
         '- Toutes les erreurs utilisent le format RFC 7807 `application/problem+json` avec un champ `code` stable.',
-        '- Les montants sont des entiers de FCFA transmis en chaine de caracteres : le franc CFA n\'a pas de sous-unite.',
-        '- Les dates sont en UTC ISO 8601. L\'affichage se fait dans le fuseau Africa/Abidjan.',
+        "- Les montants sont des entiers de FCFA transmis en chaine de caracteres : le franc CFA n'a pas de sous-unite.",
+        "- Les dates sont en UTC ISO 8601. L'affichage se fait dans le fuseau Africa/Abidjan.",
         '- Les numeros de telephone sont normalises au format E.164, par exemple `+2250701020304`.',
-        '- Les ecritures critiques exigent l\'en-tete `Idempotency-Key`.',
+        "- Les ecritures critiques exigent l'en-tete `Idempotency-Key`.",
         '- La pagination est par curseur opaque : `cursor` et `limit`, jamais par decalage.',
       ].join('\n'),
     )

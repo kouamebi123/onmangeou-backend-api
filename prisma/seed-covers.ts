@@ -13,7 +13,7 @@ const COVERS_BY_SLUG: Record<string, string> = {
 
 const FORCE_COVER_SLUGS = new Set(['maquis-gaston-tardif-rennes', 'cafe-bissap-jeanne-darc-rennes']);
 
-const COVER_POOL = [
+const COVER_POOL: readonly [string, ...string[]] = [
   'https://images.unsplash.com/photo-1598103442097-8b74394b95c2?auto=format&fit=crop&w=1400&q=70',
   'https://images.unsplash.com/photo-1555939594-58d7cb561ad1?auto=format&fit=crop&w=1400&q=70',
   'https://images.unsplash.com/photo-1519708227418-c8fd9a32b7a2?auto=format&fit=crop&w=1400&q=70',
@@ -69,7 +69,7 @@ export async function seedMissingRestaurantImages(prisma: PrismaClient): Promise
     }
     await prisma.product.update({
       where: { id: product.id },
-      data: { imageUrl: imageUrl as string },
+      data: { imageUrl },
     });
     dishes += 1;
   }

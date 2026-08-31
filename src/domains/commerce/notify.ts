@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { PrismaService } from '../../infrastructure/prisma/prisma.service';
+import type { PrismaService } from '../../infrastructure/prisma/prisma.service';
 
 export async function notifyUser(
   prisma: PrismaService,

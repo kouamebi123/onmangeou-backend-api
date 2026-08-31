@@ -66,8 +66,8 @@ export class AdministrationController {
   @Get('audit-logs')
   @RequirePermissions(PLATFORM_PERMISSIONS.ADMIN_AUDIT_READ)
   @ApiOperation({
-    summary: 'Consulter le journal d\'audit',
-    description: 'Lecture seule. Aucune alteration n\'est possible, y compris pour un administrateur.',
+    summary: "Consulter le journal d'audit",
+    description: "Lecture seule. Aucune alteration n'est possible, y compris pour un administrateur.",
   })
   async listAudit(@Query() query: AdminListQuery): Promise<PageResult<AdminAuditView>> {
     return this.administration.listAuditLogs(query);
@@ -77,7 +77,8 @@ export class AdministrationController {
   @RequirePermissions(PLATFORM_PERMISSIONS.ADMIN_BILLING_READ)
   @ApiOperation({
     summary: 'Lire le bareme d’abonnement',
-    description: 'Source unique : table module_prices / platform_billing. Aucun tarif n’est code cote serveur.',
+    description:
+      'Source unique : table module_prices / platform_billing. Aucun tarif n’est code cote serveur.',
   })
   async getModulePrices() {
     return this.entitlements.catalog();

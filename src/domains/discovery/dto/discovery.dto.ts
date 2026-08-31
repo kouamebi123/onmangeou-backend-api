@@ -47,7 +47,8 @@ export class DiscoverRestaurantsQuery {
   longitude?: number;
 
   @ApiPropertyOptional({
-    description: 'Rayon de recherche en metres. Ignore sans coordonnees. Sans rayon, le tri distance reste global.',
+    description:
+      'Rayon de recherche en metres. Ignore sans coordonnees. Sans rayon, le tri distance reste global.',
     minimum: 100,
     maximum: 50000,
   })
@@ -81,14 +82,14 @@ export class DiscoverRestaurantsQuery {
   @IsIn(['DINE_IN', 'TAKEAWAY', 'DELIVERY', 'RESERVATION'])
   service?: 'DINE_IN' | 'TAKEAWAY' | 'DELIVERY' | 'RESERVATION';
 
-  @ApiPropertyOptional({ description: 'Prix minimum d\'un plat, en FCFA entier.' })
+  @ApiPropertyOptional({ description: "Prix minimum d'un plat, en FCFA entier." })
   @IsOptional()
   @Type(() => Number)
   @IsInt()
   @Min(0)
   minPrice?: number;
 
-  @ApiPropertyOptional({ description: 'Prix maximum d\'un plat, en FCFA entier.' })
+  @ApiPropertyOptional({ description: "Prix maximum d'un plat, en FCFA entier." })
   @IsOptional()
   @Type(() => Number)
   @IsInt()

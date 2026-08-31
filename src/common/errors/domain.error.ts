@@ -37,6 +37,9 @@ export function conflict(code: ProblemCode, reason: string, publicDetail?: strin
   return new DomainError(code, reason, publicDetail === undefined ? {} : { publicDetail });
 }
 
-export function validationFailed(fields: ProblemFieldError[], reason = 'Validation metier echouee'): DomainError {
+export function validationFailed(
+  fields: ProblemFieldError[],
+  reason = 'Validation metier echouee',
+): DomainError {
   return new DomainError('VALIDATION_FAILED', reason, { fields });
 }

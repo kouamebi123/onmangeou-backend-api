@@ -34,7 +34,8 @@ function sqlAmount(value: unknown, label: string): bigint {
     return 0n;
   }
   if (typeof value === 'object') {
-    const text = typeof (value as { toString?: () => string }).toString === 'function' ? String(value) : '0';
+    const stringify = (value as { toString?: unknown }).toString;
+    const text = typeof stringify === 'function' ? String(stringify.call(value)) : '0';
     return /^-?\d+$/.test(text) ? toAmount(text, label) : 0n;
   }
   return toAmount(value, label);
@@ -48,10 +49,7 @@ export class CommerceService {
     private readonly entitlements: EntitlementsService,
   ) {}
 
-  private async isEstablishmentModuleEnabled(
-    establishmentId: string,
-    code: ModuleCode | undefined,
-  ): Promise<boolean> {
+  private async isEstablishmentModuleEnabled(establishmentId: string, code: ModuleCode): Promise<boolean> {
     const establishment = await this.prisma.establishment.findFirst({
       where: { id: establishmentId, deletedAt: null },
       select: { organizationId: true },
@@ -64,7 +62,7 @@ export class CommerceService {
 
   private async requireModules(
     actor: AuthenticatedActor,
-    codes: ModuleCode[],
+    codes: readonly [ModuleCode, ...ModuleCode[]],
     establishmentId?: string,
   ): Promise<void> {
     const organizationId = this.tenant.requireOrganization(actor);
@@ -78,10 +76,17 @@ export class CommerceService {
 
   async quote(establishmentId: string, items: Array<{ productId: string; quantity: number }>) {
     const products = await this.prisma.product.findMany({
-      where: { id: { in: items.map((item) => item.productId) }, establishmentId, deletedAt: null, status: 'PUBLISHED' },
+      where: {
+        id: { in: items.map((item) => item.productId) },
+        establishmentId,
+        deletedAt: null,
+        status: 'PUBLISHED',
+      },
     });
     if (products.length !== items.length) {
-      throw validationFailed([{ field: 'items', code: 'invalid', message: 'Un plat est invalide pour ce devis' }]);
+      throw validationFailed([
+        { field: 'items', code: 'invalid', message: 'Un plat est invalide pour ce devis' },
+      ]);
     }
     const lines = items.map((item) => {
       const product = products.find((entry) => entry.id === item.productId);
@@ -101,7 +106,11 @@ export class CommerceService {
     return { lines, total: toMoneyView(total), currency: 'XOF' };
   }
 
-  async putCart(actor: AuthenticatedActor, establishmentId: string, items: Array<{ productId: string; quantity: number }>) {
+  async putCart(
+    actor: AuthenticatedActor,
+    establishmentId: string,
+    items: Array<{ productId: string; quantity: number }>,
+  ) {
     const establishment = await this.prisma.establishment.findFirst({
       where: { id: establishmentId, deletedAt: null, status: 'PUBLISHED' },
       select: { id: true },
@@ -141,7 +150,9 @@ export class CommerceService {
     if (!carts[0]) {
       return { establishmentId: null, items: [] };
     }
-    const items = await this.prisma.$queryRaw<Array<{ product_id: string; quantity: number; name: string; unit: unknown }>>`
+    const items = await this.prisma.$queryRaw<
+      Array<{ product_id: string; quantity: number; name: string; unit: unknown }>
+    >`
       SELECT i.product_id, i.quantity, p.name, p.base_price_amount AS unit
       FROM cart_items i
       JOIN products p ON p.id = i.product_id
@@ -215,7 +226,9 @@ export class CommerceService {
   }
 
   private async succeedIntent(intentId: string, userId?: string) {
-    const rows = await this.prisma.$queryRaw<Array<{ id: string; order_id: string; user_id: string; status: string }>>`
+    const rows = await this.prisma.$queryRaw<
+      Array<{ id: string; order_id: string; user_id: string; status: string }>
+    >`
       SELECT id, order_id, user_id, status FROM payment_intents WHERE id = ${intentId}::uuid LIMIT 1
     `;
     const intent = rows[0];
@@ -239,13 +252,21 @@ export class CommerceService {
       WHERE o.id = ${intent.order_id}::uuid
     `;
     for (const owner of owners) {
-      await notifyUser(this.prisma, owner.user_id, 'ORDER', 'Nouvelle commande payée', 'Un ticket attend en cuisine.');
+      await notifyUser(
+        this.prisma,
+        owner.user_id,
+        'ORDER',
+        'Nouvelle commande payée',
+        'Un ticket attend en cuisine.',
+      );
     }
     return { id: intent.id, status: 'SUCCEEDED', replayed: false };
   }
 
   async listNotifications(actor: AuthenticatedActor) {
-    return this.prisma.$queryRaw<Array<{ id: string; title: string; body: string; kind: string; read_at: Date | null; created_at: Date }>>`
+    return this.prisma.$queryRaw<
+      Array<{ id: string; title: string; body: string; kind: string; read_at: Date | null; created_at: Date }>
+    >`
       SELECT id, title, body, kind, read_at, created_at
       FROM notifications
       WHERE user_id = ${actor.userId}::uuid
@@ -290,7 +311,9 @@ export class CommerceService {
     );
     const startsAt = new Date(dto.startsAt);
     if (Number.isNaN(startsAt.getTime()) || startsAt.getTime() < Date.now() - 60_000) {
-      throw validationFailed([{ field: 'startsAt', code: 'invalid', message: 'La date de réservation est passée' }]);
+      throw validationFailed([
+        { field: 'startsAt', code: 'invalid', message: 'La date de réservation est passée' },
+      ]);
     }
     const user = await this.prisma.user.findUnique({
       where: { id: actor.userId },
@@ -381,7 +404,9 @@ export class CommerceService {
   }
 
   async createReview(actor: AuthenticatedActor, dto: CreateReviewDto) {
-    const orders = await this.prisma.$queryRaw<Array<{ id: string; establishment_id: string; customer_user_id: string; status: string }>>`
+    const orders = await this.prisma.$queryRaw<
+      Array<{ id: string; establishment_id: string; customer_user_id: string; status: string }>
+    >`
       SELECT id, establishment_id, customer_user_id, status FROM orders WHERE id = ${dto.orderId}::uuid
     `;
     const order = orders[0];
@@ -401,7 +426,9 @@ export class CommerceService {
                 ${dto.score}, ${dto.body?.trim() || null}, 'PUBLISHED', NOW())
       `;
     } catch {
-      throw new DomainError('CONFLICT', 'Avis deja depose', { publicDetail: 'Vous avez déjà noté cette commande.' });
+      throw new DomainError('CONFLICT', 'Avis deja depose', {
+        publicDetail: 'Vous avez déjà noté cette commande.',
+      });
     }
     return this.getReview(id);
   }
@@ -439,7 +466,10 @@ export class CommerceService {
   }
 
   async listEvents(establishmentId: string) {
-    if (MODULE_CODES.MARKETING_PROMOTIONS && !(await this.isEstablishmentModuleEnabled(establishmentId, MODULE_CODES.MARKETING_PROMOTIONS))) {
+    if (
+      MODULE_CODES.MARKETING_PROMOTIONS &&
+      !(await this.isEstablishmentModuleEnabled(establishmentId, MODULE_CODES.MARKETING_PROMOTIONS))
+    ) {
       return [];
     }
     return this.prisma.$queryRaw`
@@ -480,7 +510,10 @@ export class CommerceService {
   }
 
   async listPromotions(establishmentId: string) {
-    if (MODULE_CODES.MARKETING_PROMOTIONS && !(await this.isEstablishmentModuleEnabled(establishmentId, MODULE_CODES.MARKETING_PROMOTIONS))) {
+    if (
+      MODULE_CODES.MARKETING_PROMOTIONS &&
+      !(await this.isEstablishmentModuleEnabled(establishmentId, MODULE_CODES.MARKETING_PROMOTIONS))
+    ) {
       return [];
     }
     return this.prisma.$queryRaw`
@@ -498,7 +531,9 @@ export class CommerceService {
       SELECT id FROM cash_sessions WHERE establishment_id = ${dto.establishmentId}::uuid AND status = 'OPEN' LIMIT 1
     `;
     if (open[0]) {
-      throw new DomainError('CONFLICT', 'Session deja ouverte', { publicDetail: 'Fermez d’abord la session en cours.' });
+      throw new DomainError('CONFLICT', 'Session deja ouverte', {
+        publicDetail: 'Fermez d’abord la session en cours.',
+      });
     }
     const id = randomUUID();
     const amount = toAmount(dto.openingAmount, 'fond de caisse');
@@ -510,7 +545,9 @@ export class CommerceService {
   }
 
   async addCashMovement(actor: AuthenticatedActor, dto: CashMovementDto) {
-    const sessions = await this.prisma.$queryRaw<Array<{ id: string; establishment_id: string; status: string }>>`
+    const sessions = await this.prisma.$queryRaw<
+      Array<{ id: string; establishment_id: string; status: string }>
+    >`
       SELECT id, establishment_id, status FROM cash_sessions WHERE id = ${dto.sessionId}::uuid
     `;
     if (!sessions[0] || sessions[0].status !== 'OPEN') {
@@ -709,7 +746,9 @@ export class CommerceService {
     await this.tenant.assertEstablishmentInScope(actor, items[0].establishment_id);
     const next = items[0].quantity + dto.delta;
     if (next < 0) {
-      throw validationFailed([{ field: 'delta', code: 'invalid', message: 'Le stock ne peut pas devenir négatif' }]);
+      throw validationFailed([
+        { field: 'delta', code: 'invalid', message: 'Le stock ne peut pas devenir négatif' },
+      ]);
     }
     await this.prisma.$executeRaw`
       UPDATE inventory_items SET quantity = ${next}, updated_at = NOW() WHERE id = ${itemId}::uuid
@@ -961,7 +1000,13 @@ export class CommerceService {
 
   private async getCashSession(id: string) {
     const sessions = await this.prisma.$queryRaw<
-      Array<{ id: string; establishment_id: string; opening_amount: unknown; closing_amount: unknown; status: string }>
+      Array<{
+        id: string;
+        establishment_id: string;
+        opening_amount: unknown;
+        closing_amount: unknown;
+        status: string;
+      }>
     >`
       SELECT id, establishment_id, opening_amount, closing_amount, status FROM cash_sessions WHERE id = ${id}::uuid
     `;

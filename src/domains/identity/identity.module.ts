@@ -25,8 +25,7 @@ import { SessionService } from './session.service';
       // l'adaptateur est choisi par configuration, jamais code en dur.
       provide: SMS_SENDER,
       inject: [APP_LOGGER, AppConfigService],
-      useFactory: (logger: AppLogger, config: AppConfigService) =>
-        new ConsoleSmsSender(logger, config),
+      useFactory: (logger: AppLogger, config: AppConfigService) => new ConsoleSmsSender(logger, config),
     },
   ],
   exports: [IdentityService, SessionService, TokenService, ActorResolverService],

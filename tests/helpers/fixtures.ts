@@ -55,17 +55,13 @@ export async function authenticate(
 ): Promise<AuthenticatedUser> {
   const phone = options.phone ?? nextPhone();
 
-  const requested = await context
-    .http()
-    .post('/api/v1/auth/otp/request')
-    .send({ phone })
-    .expect(202);
+  const requested = await context.http().post('/api/v1/auth/otp/request').send({ phone }).expect(202);
 
   const challenge = payloadOf<{ devCode?: string }>(requested.body);
 
   if (challenge.devCode === undefined) {
     throw new Error(
-      "Le code de developpement est absent : OTP_DEV_ECHO_CODE doit valoir true dans .env.test.",
+      'Le code de developpement est absent : OTP_DEV_ECHO_CODE doit valoir true dans .env.test.',
     );
   }
 

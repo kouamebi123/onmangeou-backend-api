@@ -1,13 +1,6 @@
 import type { PrismaClient } from '../src/infrastructure/prisma/generated/client';
 
-type WeekDay =
-  | 'MONDAY'
-  | 'TUESDAY'
-  | 'WEDNESDAY'
-  | 'THURSDAY'
-  | 'FRIDAY'
-  | 'SATURDAY'
-  | 'SUNDAY';
+type WeekDay = 'MONDAY' | 'TUESDAY' | 'WEDNESDAY' | 'THURSDAY' | 'FRIDAY' | 'SATURDAY' | 'SUNDAY';
 
 const WEEK: WeekDay[] = ['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY', 'SUNDAY'];
 const WEEK_NO_SUNDAY: WeekDay[] = WEEK.filter((day) => day !== 'SUNDAY');
@@ -47,7 +40,11 @@ export async function seedRennesDemo(prisma: PrismaClient): Promise<void> {
     phoneE164: string;
     coverImageUrl: string;
     hours: Array<{ weekDay: WeekDay; opensAtMinutes: number; closesAtMinutes: number }>;
-    services: Array<{ type: 'DINE_IN' | 'TAKEAWAY' | 'DELIVERY'; enabled: boolean; leadTimeMinutes?: number }>;
+    services: Array<{
+      type: 'DINE_IN' | 'TAKEAWAY' | 'DELIVERY';
+      enabled: boolean;
+      leadTimeMinutes?: number;
+    }>;
     product: {
       name: string;
       amount: bigint;
@@ -67,7 +64,8 @@ export async function seedRennesDemo(prisma: PrismaClient): Promise<void> {
       longitude: -1.6811,
       description: 'Grillades ivoiriennes à deux pas de chez vous.',
       phoneE164: '+33600000011',
-      coverImageUrl: 'https://images.unsplash.com/photo-1527477396000-e27163b481c2?auto=format&fit=crop&w=1400&q=70',
+      coverImageUrl:
+        'https://images.unsplash.com/photo-1527477396000-e27163b481c2?auto=format&fit=crop&w=1400&q=70',
       hours: hours(WEEK, 690, 1350),
       services: [
         { type: 'DINE_IN', enabled: true },
@@ -78,7 +76,8 @@ export async function seedRennesDemo(prisma: PrismaClient): Promise<void> {
         amount: 5500n,
         halal: true,
         description: 'Poulet mariné au feu, attiéké et sauce tomate pimentée.',
-        imageUrl: 'https://images.unsplash.com/photo-1527477396000-e27163b481c2?auto=format&fit=crop&w=800&q=70',
+        imageUrl:
+          'https://images.unsplash.com/photo-1527477396000-e27163b481c2?auto=format&fit=crop&w=800&q=70',
       },
     },
     {
@@ -91,7 +90,8 @@ export async function seedRennesDemo(prisma: PrismaClient): Promise<void> {
       longitude: -1.6895,
       description: 'Sauce graine, kedjenou et alloco faits maison.',
       phoneE164: '+33600000012',
-      coverImageUrl: 'https://images.unsplash.com/photo-1604329760661-e71dc83f8f26?auto=format&fit=crop&w=1400&q=70',
+      coverImageUrl:
+        'https://images.unsplash.com/photo-1604329760661-e71dc83f8f26?auto=format&fit=crop&w=1400&q=70',
       hours: hours(WEEK_NO_SUNDAY, 690, 1320),
       services: [
         { type: 'DINE_IN', enabled: true },
@@ -102,7 +102,8 @@ export async function seedRennesDemo(prisma: PrismaClient): Promise<void> {
         amount: 4800n,
         halal: true,
         description: 'Poulet mijoté en cocotte, sauce graine et alloco.',
-        imageUrl: 'https://images.unsplash.com/photo-1604329760661-e71dc83f8f26?auto=format&fit=crop&w=800&q=70',
+        imageUrl:
+          'https://images.unsplash.com/photo-1604329760661-e71dc83f8f26?auto=format&fit=crop&w=800&q=70',
       },
     },
     {
@@ -115,7 +116,8 @@ export async function seedRennesDemo(prisma: PrismaClient): Promise<void> {
       longitude: -1.6779,
       description: 'Attiéké, garba et poissons braisés en centre-ville.',
       phoneE164: '+33600000013',
-      coverImageUrl: 'https://images.unsplash.com/photo-1512058564366-18510be2db19?auto=format&fit=crop&w=1400&q=70',
+      coverImageUrl:
+        'https://images.unsplash.com/photo-1512058564366-18510be2db19?auto=format&fit=crop&w=1400&q=70',
       hours: hours(WEEK, 660, 1380),
       services: [
         { type: 'DINE_IN', enabled: true },
@@ -128,7 +130,8 @@ export async function seedRennesDemo(prisma: PrismaClient): Promise<void> {
         vegetarian: false,
         halal: true,
         description: 'Attiéké, thon frit et piment — le classique du déjeuner.',
-        imageUrl: 'https://images.unsplash.com/photo-1512058564366-18510be2db19?auto=format&fit=crop&w=800&q=70',
+        imageUrl:
+          'https://images.unsplash.com/photo-1512058564366-18510be2db19?auto=format&fit=crop&w=800&q=70',
       },
     },
     {
@@ -141,7 +144,8 @@ export async function seedRennesDemo(prisma: PrismaClient): Promise<void> {
       longitude: -1.6688,
       description: 'Braisés au feu de bois, terrasse côté parc.',
       phoneE164: '+33600000014',
-      coverImageUrl: 'https://images.unsplash.com/photo-1519708227418-c8fd9a32b7a2?auto=format&fit=crop&w=1400&q=70',
+      coverImageUrl:
+        'https://images.unsplash.com/photo-1519708227418-c8fd9a32b7a2?auto=format&fit=crop&w=1400&q=70',
       hours: hours(WEEK, 720, 1410),
       services: [{ type: 'DINE_IN', enabled: true }],
       product: {
@@ -149,7 +153,8 @@ export async function seedRennesDemo(prisma: PrismaClient): Promise<void> {
         amount: 5200n,
         halal: true,
         description: 'Poisson entier au feu de bois, alloco et oignons marinés.',
-        imageUrl: 'https://images.unsplash.com/photo-1519708227418-c8fd9a32b7a2?auto=format&fit=crop&w=800&q=70',
+        imageUrl:
+          'https://images.unsplash.com/photo-1519708227418-c8fd9a32b7a2?auto=format&fit=crop&w=800&q=70',
       },
     },
     {
@@ -162,7 +167,8 @@ export async function seedRennesDemo(prisma: PrismaClient): Promise<void> {
       longitude: -1.6792,
       description: 'Brochettes, alloco et attiéké à emporter.',
       phoneE164: '+33600000015',
-      coverImageUrl: 'https://images.unsplash.com/photo-1555939594-58d7cb561ad1?auto=format&fit=crop&w=1400&q=70',
+      coverImageUrl:
+        'https://images.unsplash.com/photo-1555939594-58d7cb561ad1?auto=format&fit=crop&w=1400&q=70',
       hours: hours(WEEK_NO_SUNDAY, 690, 1350),
       services: [
         { type: 'DINE_IN', enabled: true },
@@ -186,7 +192,8 @@ export async function seedRennesDemo(prisma: PrismaClient): Promise<void> {
       longitude: -1.6645,
       description: 'Maquis décontracté, bière et grillades.',
       phoneE164: '+33600000016',
-      coverImageUrl: 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?auto=format&fit=crop&w=1400&q=70',
+      coverImageUrl:
+        'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?auto=format&fit=crop&w=1400&q=70',
       hours: hours(WEEK, 720, 1440),
       services: [{ type: 'DINE_IN', enabled: true }],
       product: {
@@ -194,7 +201,8 @@ export async function seedRennesDemo(prisma: PrismaClient): Promise<void> {
         amount: 1800n,
         vegetarian: true,
         description: 'Banane plantain frite, fromage fondu et piment doux.',
-        imageUrl: 'https://images.unsplash.com/photo-1467003909585-2f8a72700288?auto=format&fit=crop&w=800&q=70',
+        imageUrl:
+          'https://images.unsplash.com/photo-1467003909585-2f8a72700288?auto=format&fit=crop&w=800&q=70',
       },
     },
     {
@@ -207,7 +215,8 @@ export async function seedRennesDemo(prisma: PrismaClient): Promise<void> {
       longitude: -1.7075,
       description: 'Ouvert tard : alloco, brochettes et ambiance.',
       phoneE164: '+33600000017',
-      coverImageUrl: 'https://images.unsplash.com/photo-1467003909585-2f8a72700288?auto=format&fit=crop&w=1400&q=70',
+      coverImageUrl:
+        'https://images.unsplash.com/photo-1467003909585-2f8a72700288?auto=format&fit=crop&w=1400&q=70',
       hours: hours(['FRIDAY', 'SATURDAY', 'SUNDAY'], 1080, 1560),
       services: [{ type: 'DINE_IN', enabled: true }],
       product: {
@@ -215,7 +224,8 @@ export async function seedRennesDemo(prisma: PrismaClient): Promise<void> {
         amount: 1500n,
         vegetarian: true,
         description: 'Alloco croustillant servi jusqu’au bout de la nuit.',
-        imageUrl: 'https://images.unsplash.com/photo-1467003909585-2f8a72700288?auto=format&fit=crop&w=800&q=70',
+        imageUrl:
+          'https://images.unsplash.com/photo-1467003909585-2f8a72700288?auto=format&fit=crop&w=800&q=70',
       },
     },
     {
@@ -228,7 +238,8 @@ export async function seedRennesDemo(prisma: PrismaClient): Promise<void> {
       longitude: -1.6558,
       description: 'Riz gras, sauce graine et plats du jour.',
       phoneE164: '+33600000018',
-      coverImageUrl: 'https://images.unsplash.com/photo-1516684669134-de6f7c473a2a?auto=format&fit=crop&w=1400&q=70',
+      coverImageUrl:
+        'https://images.unsplash.com/photo-1516684669134-de6f7c473a2a?auto=format&fit=crop&w=1400&q=70',
       hours: hours(WEEK, 660, 1260),
       services: [
         { type: 'DINE_IN', enabled: true },
@@ -240,7 +251,8 @@ export async function seedRennesDemo(prisma: PrismaClient): Promise<void> {
         amount: 2800n,
         halal: true,
         description: 'Riz gras parfumé, poulet braisé et légumes du jour.',
-        imageUrl: 'https://images.unsplash.com/photo-1516684669134-de6f7c473a2a?auto=format&fit=crop&w=800&q=70',
+        imageUrl:
+          'https://images.unsplash.com/photo-1516684669134-de6f7c473a2a?auto=format&fit=crop&w=800&q=70',
       },
     },
     {
@@ -253,7 +265,8 @@ export async function seedRennesDemo(prisma: PrismaClient): Promise<void> {
       longitude: -1.6702,
       description: 'Bissap, jus de gingembre et pâtisseries. Ferme en fin d’après-midi.',
       phoneE164: '+33600000019',
-      coverImageUrl: 'https://images.unsplash.com/photo-1556679343-c7306c1976bc?auto=format&fit=crop&w=1400&q=70',
+      coverImageUrl:
+        'https://images.unsplash.com/photo-1556679343-c7306c1976bc?auto=format&fit=crop&w=1400&q=70',
       hours: hours(WEEK, 480, 1080),
       services: [
         { type: 'DINE_IN', enabled: true },
@@ -277,7 +290,8 @@ export async function seedRennesDemo(prisma: PrismaClient): Promise<void> {
       longitude: -1.6938,
       description: 'Poulet braisé pour les soignants et les riverains.',
       phoneE164: '+33600000020',
-      coverImageUrl: 'https://images.unsplash.com/photo-1598515214211-89d3c73ae83b?auto=format&fit=crop&w=1400&q=70',
+      coverImageUrl:
+        'https://images.unsplash.com/photo-1598515214211-89d3c73ae83b?auto=format&fit=crop&w=1400&q=70',
       hours: hours(WEEK, 690, 1320),
       services: [
         { type: 'DINE_IN', enabled: true },
@@ -289,7 +303,8 @@ export async function seedRennesDemo(prisma: PrismaClient): Promise<void> {
         amount: 3500n,
         halal: true,
         description: 'Base attiéké, poulet braisé et fromage gratiné.',
-        imageUrl: 'https://images.unsplash.com/photo-1598515214211-89d3c73ae83b?auto=format&fit=crop&w=800&q=70',
+        imageUrl:
+          'https://images.unsplash.com/photo-1598515214211-89d3c73ae83b?auto=format&fit=crop&w=800&q=70',
       },
     },
   ];
@@ -385,8 +400,6 @@ export async function seedRennesDemo(prisma: PrismaClient): Promise<void> {
   }
 
   process.stdout.write(
-    created === 0
-      ? 'Restaurants de Rennes deja presents.\n'
-      : `${created} restaurants de Rennes crees.\n`,
+    created === 0 ? 'Restaurants de Rennes deja presents.\n' : `${created} restaurants de Rennes crees.\n`,
   );
 }

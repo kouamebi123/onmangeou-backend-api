@@ -11,7 +11,12 @@ import type { AppLogger } from '../logging/app-logger';
 import { APP_LOGGER } from '../logging/app-logger';
 import { Inject } from '@nestjs/common';
 import { DomainError } from './domain.error';
-import { buildProblemDetails, type ProblemCode, type ProblemDetails, type ProblemFieldError } from './problem-details';
+import {
+  buildProblemDetails,
+  type ProblemCode,
+  type ProblemDetails,
+  type ProblemFieldError,
+} from './problem-details';
 import type { AppRequest } from '../http/request-context';
 
 /**
@@ -41,10 +46,7 @@ export class AppExceptionFilter implements ExceptionFilter {
 
     this.log(exception, problem, request);
 
-    response
-      .status(problem.status)
-      .type('application/problem+json')
-      .json(problem);
+    response.status(problem.status).type('application/problem+json').json(problem);
   }
 
   private toProblemDetails(exception: unknown, requestId: string): ProblemDetails {
@@ -71,7 +73,11 @@ export class AppExceptionFilter implements ExceptionFilter {
     // (specification section 20.4).
     const fields = extractFieldErrors(payload);
 
-    return buildProblemDetails(mapStatusToProblemCode(status), requestId, fields.length > 0 ? { fields } : {});
+    return buildProblemDetails(
+      mapStatusToProblemCode(status),
+      requestId,
+      fields.length > 0 ? { fields } : {},
+    );
   }
 
   private log(exception: unknown, problem: ProblemDetails, request: AppRequest): void {

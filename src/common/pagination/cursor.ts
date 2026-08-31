@@ -71,11 +71,7 @@ export interface PageResult<T> {
  * La requete SQL demande `limit + 1` lignes : la presence de la ligne
  * supplementaire indique qu'une page suivante existe, sans requete de comptage.
  */
-export function buildPage<T>(
-  rows: T[],
-  limit: number,
-  toCursor: (row: T) => CursorPayload,
-): PageResult<T> {
+export function buildPage<T>(rows: T[], limit: number, toCursor: (row: T) => CursorPayload): PageResult<T> {
   if (rows.length <= limit) {
     return { items: rows, nextCursor: null };
   }

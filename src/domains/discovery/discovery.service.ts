@@ -4,12 +4,7 @@ import { PrismaService } from '../../infrastructure/prisma/prisma.service';
 import { Clock } from '../../common/time/clock';
 import { DomainError } from '../../common/errors/domain.error';
 import { toMoneyView, type MoneyView } from '../../common/money/money';
-import {
-  buildPage,
-  decodeCursor,
-  normalizePageSize,
-  type PageResult,
-} from '../../common/pagination/cursor';
+import { buildPage, decodeCursor, normalizePageSize, type PageResult } from '../../common/pagination/cursor';
 import { EntitlementsService } from '../entitlements/entitlements.service';
 import { filterServicesByModules, toPublicModules } from '../entitlements/module-codes';
 import { computeOpeningStatus, type HoursException, type HoursSlot } from '../organizations/opening-hours';
@@ -124,9 +119,7 @@ export class DiscoveryService {
     if (sort === 'distance' && !hasPoint) {
       throw new DomainError('VALIDATION_FAILED', 'Tri par distance sans coordonnees', {
         publicDetail: 'Activez la localisation ou choisissez un quartier pour trier par distance.',
-        fields: [
-          { field: 'latitude', code: 'REQUIRED', message: 'La position est requise pour ce tri.' },
-        ],
+        fields: [{ field: 'latitude', code: 'REQUIRED', message: 'La position est requise pour ce tri.' }],
       });
     }
 
@@ -334,8 +327,7 @@ export class DiscoveryService {
               name: product.name,
               description: product.description,
               price: toMoneyView(product.basePriceAmount),
-              available:
-                availability === undefined || availability.status === 'AVAILABLE' || temporarilyBack,
+              available: availability === undefined || availability.status === 'AVAILABLE' || temporarilyBack,
               vegetarian: product.vegetarian,
               halal: product.halal,
               spicyLevel: product.spicyLevel,
@@ -444,7 +436,10 @@ export class DiscoveryService {
    * une union SQL sur deux index trigrammes distincts serait moins lisible pour
    * un gain nul a cette volumetrie.
    */
-  async suggest(term: string, limit = 8): Promise<Array<{ type: 'restaurant' | 'dish'; label: string; slug?: string }>> {
+  async suggest(
+    term: string,
+    limit = 8,
+  ): Promise<Array<{ type: 'restaurant' | 'dish'; label: string; slug?: string }>> {
     if (term.trim().length < 2) {
       return [];
     }
@@ -491,19 +486,14 @@ export class DiscoveryService {
       ? Prisma.sql`ROUND(ST_Distance(e.location, ${point})::numeric)::double precision`
       : Prisma.sql`NULL::double precision`;
 
-    const conditions: Prisma.Sql[] = [
-      Prisma.sql`e.status = 'PUBLISHED'`,
-      Prisma.sql`e.deleted_at IS NULL`,
-    ];
+    const conditions: Prisma.Sql[] = [Prisma.sql`e.status = 'PUBLISHED'`, Prisma.sql`e.deleted_at IS NULL`];
 
     if (point && query.radiusMeters !== undefined) {
       conditions.push(Prisma.sql`ST_DWithin(e.location, ${point}, ${query.radiusMeters})`);
     }
 
     if (query.city !== undefined) {
-      conditions.push(
-        Prisma.sql`onmangeou_normalize_text(e.city) = onmangeou_normalize_text(${query.city})`,
-      );
+      conditions.push(Prisma.sql`onmangeou_normalize_text(e.city) = onmangeou_normalize_text(${query.city})`);
     }
 
     if (query.district !== undefined) {

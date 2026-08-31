@@ -13,7 +13,11 @@ import { AuditService, AUDIT_ACTIONS } from '../audit/audit.service';
 import { MODULE_CODES } from '../entitlements/module-codes';
 import { findOverlappingSlots, type HoursSlot } from './opening-hours';
 import { slugify, withSlugSuffix } from './slug';
-import type { CreateEstablishmentDto, CreateOrganizationDto, UpdateEstablishmentDto } from './dto/merchant.dto';
+import type {
+  CreateEstablishmentDto,
+  CreateOrganizationDto,
+  UpdateEstablishmentDto,
+} from './dto/merchant.dto';
 
 /**
  * Organisations, etablissements, horaires et services.
@@ -162,14 +166,9 @@ export class OrganizationsService {
       });
 
       if (!multisite) {
-        throw new DomainError(
-          'MODULE_NOT_ENABLED',
-          `Multi-etablissements inactif pour ${organizationId}`,
-          {
-            publicDetail:
-              "La gestion de plusieurs etablissements n'est pas activee sur votre abonnement.",
-          },
-        );
+        throw new DomainError('MODULE_NOT_ENABLED', `Multi-etablissements inactif pour ${organizationId}`, {
+          publicDetail: "La gestion de plusieurs etablissements n'est pas activee sur votre abonnement.",
+        });
       }
     }
 
@@ -455,7 +454,7 @@ export class OrganizationsService {
     }
 
     if (establishment._count.hours === 0) {
-      blockers.push('aucun horaire d\'ouverture n\'est renseigne');
+      blockers.push("aucun horaire d'ouverture n'est renseigne");
     }
 
     const publishedProducts = establishment.menus.flatMap((menu) =>
@@ -467,13 +466,9 @@ export class OrganizationsService {
     }
 
     if (blockers.length > 0) {
-      throw new DomainError(
-        'ESTABLISHMENT_NOT_PUBLISHED',
-        `Publication refusee : ${blockers.join(' ; ')}`,
-        {
-          publicDetail: `Avant publication, il reste a completer : ${blockers.join(' ; ')}.`,
-        },
-      );
+      throw new DomainError('ESTABLISHMENT_NOT_PUBLISHED', `Publication refusee : ${blockers.join(' ; ')}`, {
+        publicDetail: `Avant publication, il reste a completer : ${blockers.join(' ; ')}.`,
+      });
     }
 
     const now = this.clock.now();

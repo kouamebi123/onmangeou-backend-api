@@ -212,7 +212,13 @@ export class IdentityService {
 
   async updateProfile(
     userId: string,
-    input: { fullName?: string; email?: string; language?: string; defaultCity?: string; defaultDistrict?: string },
+    input: {
+      fullName?: string;
+      email?: string;
+      language?: string;
+      defaultCity?: string;
+      defaultDistrict?: string;
+    },
   ): Promise<UserProfileView> {
     if (input.email !== undefined) {
       const conflict = await this.prisma.user.findFirst({
@@ -223,7 +229,9 @@ export class IdentityService {
       if (conflict) {
         throw new DomainError('CONFLICT', 'Adresse e-mail deja utilisee', {
           publicDetail: 'Cette adresse e-mail est deja associee a un autre compte.',
-          fields: [{ field: 'email', code: 'ALREADY_USED', message: 'Cette adresse e-mail est deja utilisee.' }],
+          fields: [
+            { field: 'email', code: 'ALREADY_USED', message: 'Cette adresse e-mail est deja utilisee.' },
+          ],
         });
       }
     }

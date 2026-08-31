@@ -178,7 +178,7 @@ export class ChangeProductPriceDto {
   @Matches(AMOUNT_PATTERN, { message: 'newAmount doit etre un entier de FCFA' })
   newAmount!: string;
 
-  @ApiPropertyOptional({ maxLength: 200, description: 'Motif conserve dans l\'historique.' })
+  @ApiPropertyOptional({ maxLength: 200, description: "Motif conserve dans l'historique." })
   @IsOptional()
   @IsString()
   @MaxLength(200)
@@ -205,7 +205,7 @@ export class SetAvailabilityDto {
 
   @ApiPropertyOptional({
     description:
-      "Horodatage local de la modification, pour arbitrer une synchronisation hors ligne. La derniere ecriture gagne, avec audit.",
+      'Horodatage local de la modification, pour arbitrer une synchronisation hors ligne. La derniere ecriture gagne, avec audit.',
   })
   @IsOptional()
   @IsString()

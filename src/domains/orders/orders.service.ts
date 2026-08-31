@@ -139,7 +139,9 @@ export class OrdersService {
     });
 
     if (products.length !== quantities.size) {
-      throw validationFailed([{ field: 'items', code: 'invalid', message: 'Un plat n’appartient pas à cet établissement' }]);
+      throw validationFailed([
+        { field: 'items', code: 'invalid', message: 'Un plat n’appartient pas à cet établissement' },
+      ]);
     }
 
     const lines = products.map((product) => {
@@ -177,7 +179,11 @@ export class OrdersService {
       scheduledFor = new Date(dto.scheduledFor);
       if (Number.isNaN(scheduledFor.getTime()) || scheduledFor.getTime() < Date.now() + 10 * 60_000) {
         throw validationFailed([
-          { field: 'scheduledFor', code: 'invalid', message: 'Le créneau doit être au moins dans 10 minutes' },
+          {
+            field: 'scheduledFor',
+            code: 'invalid',
+            message: 'Le créneau doit être au moins dans 10 minutes',
+          },
         ]);
       }
     }

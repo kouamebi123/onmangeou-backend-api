@@ -61,7 +61,10 @@ export class OrdersController {
   @RequirePermissions(PERMISSIONS.ORDERS_ACCEPT)
   @Idempotent({ scope: 'orders.manual' })
   @ApiOperation({ summary: 'Créer un ticket comptoir / téléphone' })
-  async createManual(@CurrentActor() actor: AuthenticatedActor, @Body() dto: CreateOrderDto): Promise<OrderView> {
+  async createManual(
+    @CurrentActor() actor: AuthenticatedActor,
+    @Body() dto: CreateOrderDto,
+  ): Promise<OrderView> {
     return this.orders.createManual(actor, dto);
   }
 

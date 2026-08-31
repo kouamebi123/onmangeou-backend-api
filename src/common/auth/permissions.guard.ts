@@ -50,10 +50,7 @@ export class PermissionsGuard implements CanActivate {
    * Reauthentification pour remboursement, gestion des roles et export massif
    * (specification section 9.2). Un jeton vole ne suffit alors pas.
    */
-  private assertRecentAuthentication(
-    required: AnyPermissionCode[],
-    mfaSatisfiedAt: Date | undefined,
-  ): void {
+  private assertRecentAuthentication(required: AnyPermissionCode[], mfaSatisfiedAt: Date | undefined): void {
     const sensitive = required.filter((permission) => REAUTH_REQUIRED_PERMISSIONS.has(permission));
 
     if (sensitive.length === 0) {
@@ -61,7 +58,10 @@ export class PermissionsGuard implements CanActivate {
     }
 
     if (mfaSatisfiedAt === undefined) {
-      throw new DomainError('REAUTHENTICATION_REQUIRED', `Action sensible sans MFA : ${sensitive.join(', ')}`);
+      throw new DomainError(
+        'REAUTHENTICATION_REQUIRED',
+        `Action sensible sans MFA : ${sensitive.join(', ')}`,
+      );
     }
 
     const ageSeconds = (Date.now() - mfaSatisfiedAt.getTime()) / 1000;

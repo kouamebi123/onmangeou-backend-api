@@ -101,11 +101,7 @@ export function formatForDisplay(instant: Date, timeZone: string = DISPLAY_TIME_
 }
 
 /** Converti une heure locale (`YYYY-MM-DD`, minutes) en instant UTC. */
-export function localTimeToUtc(
-  dateKey: string,
-  minutes: number,
-  timeZone: string = DISPLAY_TIME_ZONE,
-): Date {
+export function localTimeToUtc(dateKey: string, minutes: number, timeZone: string = DISPLAY_TIME_ZONE): Date {
   const hours = Math.floor(minutes / 60) % 24;
   const dayOffset = Math.floor(minutes / MINUTES_PER_DAY);
   const remainder = minutes % 60;

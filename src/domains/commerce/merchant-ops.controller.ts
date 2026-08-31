@@ -25,7 +25,10 @@ export class MerchantOpsController {
 
   @Get('merchant/reservations')
   @RequirePermissions(PERMISSIONS.ORDERS_READ)
-  async reservations(@CurrentActor() actor: AuthenticatedActor, @Query('establishmentId') establishmentId?: string) {
+  async reservations(
+    @CurrentActor() actor: AuthenticatedActor,
+    @Query('establishmentId') establishmentId?: string,
+  ) {
     return this.commerce.listMerchantReservations(actor, establishmentId);
   }
 
@@ -69,7 +72,10 @@ export class MerchantOpsController {
 
   @Get('merchant/cash-sessions/current')
   @RequirePermissions(PERMISSIONS.CASH_SESSION_WRITE)
-  async currentCash(@CurrentActor() actor: AuthenticatedActor, @Query('establishmentId') establishmentId: string) {
+  async currentCash(
+    @CurrentActor() actor: AuthenticatedActor,
+    @Query('establishmentId') establishmentId: string,
+  ) {
     return this.commerce.currentCash(actor, establishmentId);
   }
 
@@ -93,7 +99,10 @@ export class MerchantOpsController {
 
   @Get('merchant/expenses')
   @RequirePermissions(PERMISSIONS.REPORTS_READ)
-  async expenses(@CurrentActor() actor: AuthenticatedActor, @Query('establishmentId') establishmentId: string) {
+  async expenses(
+    @CurrentActor() actor: AuthenticatedActor,
+    @Query('establishmentId') establishmentId: string,
+  ) {
     return this.commerce.listExpenses(actor, establishmentId);
   }
 
@@ -111,7 +120,10 @@ export class MerchantOpsController {
 
   @Get('merchant/credits')
   @RequirePermissions(PERMISSIONS.EXPENSES_CREATE)
-  async credits(@CurrentActor() actor: AuthenticatedActor, @Query('establishmentId') establishmentId: string) {
+  async credits(
+    @CurrentActor() actor: AuthenticatedActor,
+    @Query('establishmentId') establishmentId: string,
+  ) {
     return this.commerce.listCredits(actor, establishmentId);
   }
 
@@ -129,7 +141,10 @@ export class MerchantOpsController {
 
   @Get('merchant/inventory')
   @RequirePermissions(PERMISSIONS.INVENTORY_READ)
-  async inventory(@CurrentActor() actor: AuthenticatedActor, @Query('establishmentId') establishmentId: string) {
+  async inventory(
+    @CurrentActor() actor: AuthenticatedActor,
+    @Query('establishmentId') establishmentId: string,
+  ) {
     return this.commerce.listInventory(actor, establishmentId);
   }
 
@@ -151,7 +166,10 @@ export class MerchantOpsController {
 
   @Get('merchant/deliveries')
   @RequirePermissions(PERMISSIONS.ORDERS_READ)
-  async deliveries(@CurrentActor() actor: AuthenticatedActor, @Query('establishmentId') establishmentId?: string) {
+  async deliveries(
+    @CurrentActor() actor: AuthenticatedActor,
+    @Query('establishmentId') establishmentId?: string,
+  ) {
     return this.commerce.listDelivery(actor, establishmentId);
   }
 
@@ -182,7 +200,10 @@ export class MerchantOpsController {
 
   @Get('merchant/coupons')
   @RequirePermissions(PERMISSIONS.ESTABLISHMENT_WRITE)
-  async coupons(@CurrentActor() actor: AuthenticatedActor, @Query('establishmentId') establishmentId: string) {
+  async coupons(
+    @CurrentActor() actor: AuthenticatedActor,
+    @Query('establishmentId') establishmentId: string,
+  ) {
     return this.commerce.listCoupons(actor, establishmentId);
   }
 

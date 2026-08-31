@@ -55,7 +55,13 @@ function applyGlobals(app: NestExpressApplication, config: AppConfigService): vo
     origin: config.corsAllowedOrigins,
     credentials: true,
     exposedHeaders: ['X-Request-Id'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'Idempotency-Key', 'X-Request-Id', 'X-Device-Install-Id'],
+    allowedHeaders: [
+      'Content-Type',
+      'Authorization',
+      'Idempotency-Key',
+      'X-Request-Id',
+      'X-Device-Install-Id',
+    ],
   });
 
   // Necessaire derriere un reverse proxy pour que `request.ip` reflete l'adresse

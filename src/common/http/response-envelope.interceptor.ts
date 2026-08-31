@@ -1,9 +1,4 @@
-import {
-  type CallHandler,
-  type ExecutionContext,
-  Injectable,
-  type NestInterceptor,
-} from '@nestjs/common';
+import { type CallHandler, type ExecutionContext, Injectable, type NestInterceptor } from '@nestjs/common';
 import { map, type Observable } from 'rxjs';
 import type { AppRequest } from './request-context';
 

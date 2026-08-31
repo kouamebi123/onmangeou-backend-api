@@ -7,10 +7,7 @@ import {
   permissionDomain,
   type PermissionCode,
 } from '../../src/common/auth/permissions';
-import {
-  actorCoversEstablishment,
-  actorHasPermission,
-} from '../../src/common/auth/authenticated-actor';
+import { actorCoversEstablishment, actorHasPermission } from '../../src/common/auth/authenticated-actor';
 import type { AuthenticatedActor } from '../../src/common/auth/authenticated-actor';
 
 /**
@@ -41,10 +38,7 @@ describe('matrice de roles', () => {
   });
 
   it('le livreur est limite aux commandes qui lui sont assignees', () => {
-    expect(ROLE_PERMISSION_MATRIX.COURIER).toEqual([
-      PERMISSIONS.ORDERS_READ,
-      PERMISSIONS.ORDERS_DELIVER,
-    ]);
+    expect(ROLE_PERMISSION_MATRIX.COURIER).toEqual([PERMISSIONS.ORDERS_READ, PERMISSIONS.ORDERS_DELIVER]);
   });
 
   it('le comptable lit la marge mais ne modifie pas le catalogue', () => {

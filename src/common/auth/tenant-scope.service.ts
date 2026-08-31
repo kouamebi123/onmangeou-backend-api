@@ -53,10 +53,7 @@ export class TenantScopeService {
     }
 
     if (!actor.establishmentIds.includes(establishmentId)) {
-      throw new DomainError(
-        'FORBIDDEN',
-        `Membre non affecte a l'etablissement ${establishmentId}`,
-      );
+      throw new DomainError('FORBIDDEN', `Membre non affecte a l'etablissement ${establishmentId}`);
     }
 
     return { organizationId, establishmentId };

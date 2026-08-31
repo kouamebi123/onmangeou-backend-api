@@ -43,7 +43,10 @@ export class RedisService implements OnModuleDestroy {
    * sans cela, un incident entre les deux commandes creerait une cle sans
    * expiration, bloquant definitivement l'appelant.
    */
-  async incrementWithWindow(key: string, windowSeconds: number): Promise<{ count: number; ttlSeconds: number }> {
+  async incrementWithWindow(
+    key: string,
+    windowSeconds: number,
+  ): Promise<{ count: number; ttlSeconds: number }> {
     const results = await this.client.multi().incr(key).expire(key, windowSeconds, 'NX').ttl(key).exec();
 
     if (!results) {

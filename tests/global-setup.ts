@@ -19,7 +19,7 @@ export default function setup(): void {
 
   if (!existsSync(envPath)) {
     throw new Error(
-      'Fichier .env.test absent. Les tests d\'integration exigent une base dediee : copier .env.example et viser le service postgres-test.',
+      "Fichier .env.test absent. Les tests d'integration exigent une base dediee : copier .env.example et viser le service postgres-test.",
     );
   }
 

@@ -82,7 +82,7 @@ export class CatalogController {
 
   @Get('products')
   @RequirePermissions(PERMISSIONS.CATALOG_READ)
-  @ApiOperation({ summary: 'Lister les plats d\'un etablissement' })
+  @ApiOperation({ summary: "Lister les plats d'un etablissement" })
   async listProducts(
     @CurrentActor() actor: AuthenticatedActor,
     @Query('establishmentId', ParseUUIDPipe) establishmentId: string,
@@ -106,7 +106,7 @@ export class CatalogController {
   @Patch('products/:id/price')
   @RequirePermissions(PERMISSIONS.CATALOG_PRICE_WRITE)
   @ApiOperation({
-    summary: 'Changer le prix d\'un plat',
+    summary: "Changer le prix d'un plat",
     description:
       "L'ancien prix est conserve dans un historique append-only. Les commandes deja passees conservent le prix qui leur a ete applique.",
   })
