@@ -23,6 +23,7 @@ process.env['REDIS_URL'] ??= 'redis://localhost:6380/15';
 process.env['JWT_ISSUER'] ??= 'https://api.test.onmangeou.ci';
 process.env['JWT_AUDIENCE'] ??= 'onmangeou-tests';
 process.env['OTP_PEPPER'] ??= randomBytes(32).toString('hex');
+process.env['OTP_DEV_ECHO_CODE'] ??= 'true';
 
 if (process.env['JWT_PRIVATE_KEY'] === undefined || process.env['JWT_PUBLIC_KEY'] === undefined) {
   const { privateKey, publicKey } = generateKeyPairSync('ec', { namedCurve: 'P-256' });
