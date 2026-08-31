@@ -1,17 +1,19 @@
 'use strict';
 
 const { spawnSync } = require('child_process');
-const fs = require('fs');
 const path = require('path');
 
 const root = path.join(__dirname, '..');
-const esbuildBin = path.join(
-  root,
-  'node_modules/.pnpm/@esbuild+darwin-arm64@0.28.2/node_modules/@esbuild/darwin-arm64/bin/esbuild',
-);
 
-if (!fs.existsSync(esbuildBin)) {
-  throw new Error(`esbuild introuvable : ${esbuildBin}`);
+function runEsbuild(args) {
+  const result = spawnSync('pnpm', ['exec', 'esbuild', ...args], {
+    cwd: root,
+    stdio: 'inherit',
+  });
+  if (result.error) {
+    throw result.error;
+  }
+  return result.status ?? 1;
 }
 
 const compile = spawnSync(process.execPath, ['--no-experimental-require-module', path.join(__dirname, 'swc-build.cjs')], {
@@ -22,8 +24,7 @@ if (compile.status !== 0) {
   process.exit(compile.status ?? 1);
 }
 
-const result = spawnSync(
-  esbuildBin,
+const status = runEsbuild(
   [
     'dist/main.js',
     '--bundle',
@@ -46,9 +47,8 @@ const result = spawnSync(
     '--external:thread-stream',
     '--external:swagger-ui-dist',
   ],
-  { cwd: root, stdio: 'inherit' },
 );
 
-if (result.status !== 0) {
-  process.exit(result.status ?? 1);
+if (status !== 0) {
+  process.exit(status);
 }

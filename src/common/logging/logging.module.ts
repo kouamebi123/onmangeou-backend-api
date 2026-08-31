@@ -1,4 +1,5 @@
 import { Global, Module } from '@nestjs/common';
+import path from 'node:path';
 import { AppConfigService } from '../config/app-config.service';
 import { AppEnvironment } from '../config/environment.schema';
 import { APP_LOGGER, createRootLogger } from './app-logger';
@@ -15,7 +16,10 @@ import { APP_LOGGER, createRootLogger } from './app-logger';
           serviceName: config.otelServiceName,
           // Le rendu lisible est reserve au poste de developpement : les
           // environnements deployes emettent du JSON exploitable par la collecte.
-          pretty: config.appEnv === AppEnvironment.Local,
+          // Le bundle `dist/run.cjs` n'inclut pas le worker pino-pretty.
+          pretty:
+            config.appEnv === AppEnvironment.Local &&
+            !process.argv.some((arg) => arg.includes(`${path.sep}dist${path.sep}run.cjs`)),
         }),
     },
   ],
