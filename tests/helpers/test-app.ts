@@ -1,7 +1,6 @@
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import Redis from 'ioredis';
 import request from 'supertest';
-import type { App } from 'supertest/types';
 import { createApp } from '../../src/bootstrap';
 import { PrismaService } from '../../src/infrastructure/prisma/prisma.service';
 import { seedReferenceData } from '../../prisma/seed-reference';
@@ -65,7 +64,7 @@ export async function createTestContext(): Promise<TestContext> {
     app,
     prisma,
     redisAdmin,
-    http: () => request.agent(app.getHttpServer() as App),
+    http: () => request.agent(app.getHttpServer()),
   };
 }
 

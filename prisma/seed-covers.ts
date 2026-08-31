@@ -69,7 +69,7 @@ export async function seedMissingRestaurantImages(prisma: PrismaClient): Promise
     }
     await prisma.product.update({
       where: { id: product.id },
-      data: { imageUrl },
+      data: { imageUrl: imageUrl as string },
     });
     dishes += 1;
   }

@@ -10,15 +10,7 @@
     "node": ">=24.0.0 <25",
     "pnpm": ">=10.0.0"
   },
-  "pnpm": {
-    "onlyBuiltDependencies": [
-      "prisma",
-      "@prisma/engines",
-      "@prisma/client",
-      "@swc/core",
-      "esbuild"
-    ]
-  },
+
   "scripts": {
     "build": "rimraf dist && tsc -p tsconfig.build.json && tsc-alias -p tsconfig.build.json",
     "start": "node dist/main.js",

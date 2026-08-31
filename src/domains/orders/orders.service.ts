@@ -304,7 +304,7 @@ export class OrdersService {
   async changeMerchantStatus(
     actor: AuthenticatedActor,
     orderId: string,
-    status: keyof typeof MERCHANT_TRANSITIONS,
+    status: OrderStatus,
   ): Promise<OrderView> {
     const organizationId = this.tenant.requireOrganization(actor);
     const current = await this.findInOrganization(orderId, organizationId);

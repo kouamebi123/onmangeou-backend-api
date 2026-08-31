@@ -50,7 +50,7 @@ export class CommerceService {
 
   private async isEstablishmentModuleEnabled(
     establishmentId: string,
-    code: ModuleCode,
+    code: ModuleCode | undefined,
   ): Promise<boolean> {
     const establishment = await this.prisma.establishment.findFirst({
       where: { id: establishmentId, deletedAt: null },
@@ -439,7 +439,7 @@ export class CommerceService {
   }
 
   async listEvents(establishmentId: string) {
-    if (!(await this.isEstablishmentModuleEnabled(establishmentId, MODULE_CODES.MARKETING_PROMOTIONS))) {
+    if (MODULE_CODES.MARKETING_PROMOTIONS && !(await this.isEstablishmentModuleEnabled(establishmentId, MODULE_CODES.MARKETING_PROMOTIONS))) {
       return [];
     }
     return this.prisma.$queryRaw`
@@ -480,7 +480,7 @@ export class CommerceService {
   }
 
   async listPromotions(establishmentId: string) {
-    if (!(await this.isEstablishmentModuleEnabled(establishmentId, MODULE_CODES.MARKETING_PROMOTIONS))) {
+    if (MODULE_CODES.MARKETING_PROMOTIONS && !(await this.isEstablishmentModuleEnabled(establishmentId, MODULE_CODES.MARKETING_PROMOTIONS))) {
       return [];
     }
     return this.prisma.$queryRaw`
