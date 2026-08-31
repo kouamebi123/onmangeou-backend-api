@@ -1,0 +1,57 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: imresamu/postgis:18-3.6
+        env:
+          POSTGRES_USER: onmangeou
+          POSTGRES_PASSWORD: onmangeou_local_only
+          POSTGRES_DB: onmangeou_test
+          TZ: UTC
+        ports:
+          - 5434:5432
+        options: >-
+          --health-cmd "pg_isready -U onmangeou -d onmangeou_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+      redis:
+        image: redis:8-alpine
+        ports:
+          - 6380:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 20
+    env:
+      DATABASE_URL: postgresql://onmangeou:onmangeou_local_only@localhost:5434/onmangeou_test?schema=public
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.20.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm prisma generate
+      - run: pnpm prisma migrate deploy
+      - run: pnpm format:check
+      - run: pnpm lint
+      - run: pnpm typecheck
+      - run: pnpm test
+      - run: pnpm test:integration
+        env:
+          # Les tests d'intégration lisent `.env.test` pour les secrets locaux.
+          APP_ENV: test
+      - run: pnpm build

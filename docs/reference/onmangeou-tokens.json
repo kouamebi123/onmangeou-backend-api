@@ -1,0 +1,113 @@
+{
+  "$schema": "https://onmangeou.ci/schemas/design-tokens-1.json",
+  "name": "OnMangeOu Design Tokens",
+  "version": "1.0.0",
+  "source": "OnMangeOu_Specification_Technique_Maitre.md section 19",
+  "notice": "Fichier maitre. Ne jamais modifier une couleur de marque sans decision ecrite d'Emmanuel Kouame (specification section 35.2).",
+  "color": {
+    "brand": {
+      "deep": { "value": "#173B36", "usage": "fonds profonds, titres, navigation" },
+      "primary": { "value": "#1F6F5F", "usage": "actions principales, succes, reperes" },
+      "accent": { "value": "#E8783E", "usage": "accent, promotion, selection, CTA secondaire" },
+      "cream": { "value": "#F7F2E8", "usage": "fond chaleureux et surfaces" }
+    },
+    "text": {
+      "primary": { "value": "#21302D", "usage": "texte principal" },
+      "onBrand": { "value": "#FFFFFF", "usage": "texte sur fond de marque profond" },
+      "muted": { "value": "#5B6B67", "usage": "texte secondaire, contraste AA verifie sur cream et white" }
+    },
+    "border": {
+      "default": { "value": "#D9E1DE", "usage": "bordures et separateurs" }
+    },
+    "surface": {
+      "mint": { "value": "#EEF5F2", "usage": "surfaces secondaires" },
+      "white": { "value": "#FFFFFF", "usage": "cartes et texte sur fond sombre" }
+    },
+    "feedback": {
+      "error": { "value": "#C63D3D", "usage": "erreur uniquement" },
+      "warning": { "value": "#B96912", "usage": "avertissement accessible" },
+      "success": { "value": "#1F6F5F", "usage": "succes, aligne sur brand.primary" },
+      "info": { "value": "#173B36", "usage": "information neutre" }
+    }
+  },
+  "typography": {
+    "family": {
+      "base": { "value": "Inter", "fallback": "system-ui, -apple-system, Segoe UI, Roboto, sans-serif" }
+    },
+    "weight": {
+      "regular": { "value": 400, "usage": "corps" },
+      "semibold": { "value": 600, "usage": "sous-titres" },
+      "bold": { "value": 700, "usage": "titres" }
+    },
+    "size": {
+      "xs": { "value": 12, "note": "plancher absolu, aucun texte essentiel en dessous" },
+      "sm": { "value": 14 },
+      "md": { "value": 16, "note": "corps par defaut client" },
+      "lg": { "value": 18 },
+      "xl": { "value": 22 },
+      "xxl": { "value": 28 },
+      "xxxl": { "value": 34 }
+    },
+    "lineHeight": {
+      "tight": { "value": 1.35 },
+      "normal": { "value": 1.45 },
+      "relaxed": { "value": 1.55 }
+    },
+    "numeric": {
+      "cash": { "value": "tabular-nums", "usage": "chiffres de caisse et montants alignes" }
+    }
+  },
+  "spacing": {
+    "grid": { "value": 4, "usage": "grille de base" },
+    "xxs": { "value": 4 },
+    "xs": { "value": 8 },
+    "sm": { "value": 12 },
+    "md": { "value": 16 },
+    "lg": { "value": 24 },
+    "xl": { "value": 32 },
+    "xxl": { "value": 48 }
+  },
+  "radius": {
+    "sm": { "value": 8 },
+    "md": { "value": 12 },
+    "card": { "value": 16 },
+    "pill": { "value": 999 }
+  },
+  "layout": {
+    "screenPaddingMobile": { "value": 16 },
+    "screenPaddingTabletMin": { "value": 24 },
+    "screenPaddingTabletMax": { "value": 32 },
+    "minTouchTarget": { "value": 44, "usage": "cible tactile minimale en points" },
+    "maxContentWidth": { "value": 1200 }
+  },
+  "elevation": {
+    "none": { "value": "none" },
+    "subtle": {
+      "value": "0 1px 2px rgba(23, 59, 54, 0.06)",
+      "usage": "ombres legeres uniquement, bordures preferees"
+    },
+    "raised": { "value": "0 4px 12px rgba(23, 59, 54, 0.10)" }
+  },
+  "motion": {
+    "fast": { "value": 120 },
+    "base": { "value": 200 },
+    "slow": { "value": 320 },
+    "respectReduceMotion": { "value": true }
+  },
+  "locale": {
+    "defaultLanguage": { "value": "fr-CI" },
+    "currency": { "value": "XOF" },
+    "currencyLabel": { "value": "FCFA" },
+    "currencyDecimals": { "value": 0 },
+    "amountFormatExample": { "value": "12 500 FCFA" },
+    "displayTimeZone": { "value": "Africa/Abidjan" },
+    "storageTimeZone": { "value": "UTC" }
+  },
+  "logo": {
+    "elements": ["epingle de localisation", "assiette", "sourire", "accent orange", "mot OnMangeOu centre en dessous"],
+    "clearSpaceRatio": { "value": 0.25, "usage": "25 pourcent de la largeur du symbole" },
+    "minIconPx": { "value": 32 },
+    "minFullSignaturePx": { "value": 120 },
+    "variants": ["fond-clair", "fond-sombre", "monochrome", "icone-seule"]
+  }
+}

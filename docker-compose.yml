@@ -1,0 +1,91 @@
+name: onmangeou
+
+# PostgreSQL 18 + PostGIS 3.6 conformement a la specification section 5.1.
+# POSTGRES_IMAGE par defaut sur imresamu/postgis, seul miroir multi-arch de l'image
+# PostGIS officielle : postgis/postgis ne publie pas de manifeste linux/arm64.
+# En production, utiliser un PostgreSQL 18 manage avec l'extension PostGIS activee.
+
+services:
+  postgres:
+    image: ${POSTGRES_IMAGE:-imresamu/postgis:18-3.6}
+    container_name: onmangeou-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: onmangeou
+      POSTGRES_PASSWORD: onmangeou_local_only
+      POSTGRES_DB: onmangeou
+      # Les donnees sont stockees en UTC (specification 2, principe 5).
+      TZ: UTC
+      PGTZ: UTC
+    ports:
+      - '5433:5432'
+    volumes:
+      # PostgreSQL 18 attend un montage unique sur /var/lib/postgresql : le sous-dossier
+      # par version majeure permet pg_upgrade --link sans franchir la frontiere du volume.
+      - postgres-data:/var/lib/postgresql
+      - ./infra/docker/postgres-init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U onmangeou -d onmangeou']
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  postgres-test:
+    image: ${POSTGRES_IMAGE:-imresamu/postgis:18-3.6}
+    container_name: onmangeou-postgres-test
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: onmangeou
+      POSTGRES_PASSWORD: onmangeou_local_only
+      POSTGRES_DB: onmangeou_test
+      TZ: UTC
+      PGTZ: UTC
+    ports:
+      - '5434:5432'
+    command: ['postgres', '-c', 'fsync=off', '-c', 'synchronous_commit=off', '-c', 'full_page_writes=off']
+    volumes:
+      - ./infra/docker/postgres-init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U onmangeou -d onmangeou_test']
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  redis:
+    image: redis:8-alpine
+    container_name: onmangeou-redis
+    restart: unless-stopped
+    command: ['redis-server', '--appendonly', 'yes', '--maxmemory-policy', 'noeviction']
+    ports:
+      - '6380:6379'
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  minio:
+    image: minio/minio:latest
+    container_name: onmangeou-minio
+    restart: unless-stopped
+    command: ['server', '/data', '--console-address', ':9001']
+    environment:
+      MINIO_ROOT_USER: onmangeou
+      MINIO_ROOT_PASSWORD: onmangeou_local_only
+    ports:
+      - '9000:9000'
+      - '9001:9001'
+    volumes:
+      - minio-data:/data
+    healthcheck:
+      test: ['CMD', 'mc', 'ready', 'local']
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+volumes:
+  postgres-data:
+  redis-data:
+  minio-data:

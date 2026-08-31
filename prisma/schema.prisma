@@ -1,0 +1,1344 @@
+// OnMangeOu - schema de donnees
+// Reference normative : OnMangeOu_Specification_Technique_Maitre.md section 8.
+//
+// Regles globales appliquees (section 8.1) :
+//  - identifiants UUIDv7, jamais de sequence exposee ;
+//  - createdAt / updatedAt en timestamptz ;
+//  - deletedAt uniquement ou la suppression logique est autorisee ;
+//  - argent en BigInt representant des FCFA entiers, jamais de flottant ;
+//  - coordonnees en geography(Point, 4326) maintenues par declencheur SQL ;
+//  - statuts sous forme d'enums controles ;
+//  - index sur cles etrangeres, tenant, statuts, dates et colonnes de recherche.
+//
+// Perimetre de cette tranche : Identity, Organizations, Catalog, Discovery,
+// Orders (a emporter, hors paiement en ligne), Subscriptions minimal et Plateforme.
+
+generator client {
+  provider     = "prisma-client"
+  output       = "../src/infrastructure/prisma/generated"
+  moduleFormat = "cjs"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ---------------------------------------------------------------------------
+// Enums
+// ---------------------------------------------------------------------------
+
+enum UserStatus {
+  PENDING
+  ACTIVE
+  SUSPENDED
+  ANONYMIZED
+}
+
+enum AuthIdentityType {
+  PHONE
+  EMAIL
+  PASSWORD
+  PASSKEY
+}
+
+enum OtpPurpose {
+  LOGIN
+  PHONE_VERIFICATION
+  SENSITIVE_ACTION
+}
+
+enum OtpChallengeStatus {
+  PENDING
+  VERIFIED
+  EXPIRED
+  LOCKED
+}
+
+enum DevicePlatform {
+  ANDROID
+  IOS
+  WEB
+}
+
+enum ConsentType {
+  TERMS
+  PRIVACY
+  MARKETING
+  LOCATION
+}
+
+enum OrganizationStatus {
+  DRAFT
+  PENDING_VERIFICATION
+  VERIFIED
+  SUSPENDED
+}
+
+enum EstablishmentStatus {
+  DRAFT
+  PENDING_VERIFICATION
+  PUBLISHED
+  SUSPENDED
+  CLOSED
+}
+
+enum MemberStatus {
+  INVITED
+  ACTIVE
+  SUSPENDED
+  REVOKED
+}
+
+enum VerificationCaseStatus {
+  OPEN
+  IN_REVIEW
+  APPROVED
+  REJECTED
+}
+
+enum VerificationDocumentType {
+  ID_CARD
+  BUSINESS_REGISTRATION
+  TAX_IDENTIFICATION
+  STOREFRONT_PHOTO
+  PROOF_OF_ADDRESS
+  OTHER
+}
+
+enum ServiceType {
+  DINE_IN
+  TAKEAWAY
+  DELIVERY
+  RESERVATION
+}
+
+enum OrderStatus {
+  PENDING_RESTAURANT
+  ACCEPTED
+  PREPARING
+  READY
+  COMPLETED
+  REJECTED
+  CANCELLED
+}
+
+enum OrderService {
+  TAKEAWAY
+  DINE_IN
+}
+
+enum StockMode {
+  NONE
+  SIMPLE
+  INGREDIENT
+}
+
+enum PublicationStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+enum ProductAvailabilityStatus {
+  AVAILABLE
+  OUT_OF_STOCK
+  HIDDEN
+}
+
+enum OptionSelectionType {
+  SINGLE
+  MULTIPLE
+}
+
+enum SubscriptionStatus {
+  TRIALING
+  ACTIVE
+  PAST_DUE
+  SUSPENDED
+  CANCELLED
+}
+
+enum PlatformStaffRole {
+  ADMIN
+  SUPPORT
+}
+
+enum OutboxEventStatus {
+  PENDING
+  PROCESSING
+  PROCESSED
+  FAILED
+}
+
+enum IdempotencyStatus {
+  IN_PROGRESS
+  COMPLETED
+  FAILED
+}
+
+enum WeekDay {
+  MONDAY
+  TUESDAY
+  WEDNESDAY
+  THURSDAY
+  FRIDAY
+  SATURDAY
+  SUNDAY
+}
+
+// ---------------------------------------------------------------------------
+// Identite (section 8.2)
+// ---------------------------------------------------------------------------
+
+model User {
+  id String @id @default(uuid(7)) @db.Uuid
+
+  /// Telephone au format E.164, identifiant de connexion principal (section 21.1).
+  phoneE164 String     @unique @map("phone_e164") @db.VarChar(20)
+  email     String?    @unique @db.VarChar(320)
+  fullName  String?    @map("full_name") @db.VarChar(160)
+  status    UserStatus @default(PENDING)
+  language  String     @default("fr-CI") @db.VarChar(10)
+
+  phoneVerifiedAt DateTime? @map("phone_verified_at") @db.Timestamptz(3)
+  emailVerifiedAt DateTime? @map("email_verified_at") @db.Timestamptz(3)
+  lastLoginAt     DateTime? @map("last_login_at") @db.Timestamptz(3)
+
+  /// Anonymisation plutot que suppression physique lorsque l'historique financier
+  /// doit subsister (sections 8.3 et 23).
+  anonymizedAt DateTime? @map("anonymized_at") @db.Timestamptz(3)
+
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
+  deletedAt DateTime? @map("deleted_at") @db.Timestamptz(3)
+
+  profile        UserProfile?
+  authIdentities AuthIdentity[]
+  otpChallenges  OtpChallenge[]
+  sessions       Session[]
+  devices        Device[]
+  consents       Consent[]
+  memberships    OrganizationMember[]
+  favorites      Favorite[]
+  follows        Follow[]
+  auditLogs      AuditLog[]
+  platformStaff  PlatformStaff?
+  orders         Order[]
+
+  @@index([status])
+  @@index([createdAt])
+  @@map("users")
+}
+
+model UserProfile {
+  id     String @id @default(uuid(7)) @db.Uuid
+  userId String @unique @map("user_id") @db.Uuid
+
+  avatarUrl   String? @map("avatar_url") @db.VarChar(1024)
+  displayName String? @map("display_name") @db.VarChar(80)
+
+  /// Preferences de notification et d'affichage. Volontairement restreint :
+  /// aucune regle metier ne doit dependre d'un JSON libre (section 8.1).
+  notificationPreferences Json    @default("{}") @map("notification_preferences")
+  defaultCity             String? @map("default_city") @db.VarChar(120)
+  defaultDistrict         String? @map("default_district") @db.VarChar(120)
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_profiles")
+}
+
+model AuthIdentity {
+  id     String @id @default(uuid(7)) @db.Uuid
+  userId String @map("user_id") @db.Uuid
+
+  type AuthIdentityType
+
+  /// Identifiant externe verifie : telephone, e-mail ou identifiant de passkey.
+  identifier String @db.VarChar(320)
+
+  /// Empreinte du secret uniquement. Aucun secret en clair (section 22).
+  secretHash String? @map("secret_hash") @db.VarChar(512)
+
+  verifiedAt DateTime? @map("verified_at") @db.Timestamptz(3)
+  lastUsedAt DateTime? @map("last_used_at") @db.Timestamptz(3)
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([type, identifier])
+  @@index([userId])
+  @@map("auth_identities")
+}
+
+model OtpChallenge {
+  id     String  @id @default(uuid(7)) @db.Uuid
+  userId String? @map("user_id") @db.Uuid
+
+  /// Destinataire cible, conserve pour la limitation de debit avant creation du compte.
+  destination String     @db.VarChar(320)
+  purpose     OtpPurpose
+
+  /// Hash lent du code. Le code en clair n'est jamais persiste ni journalise
+  /// (sections 8.2 et 22).
+  codeHash String @map("code_hash") @db.VarChar(512)
+
+  status      OtpChallengeStatus @default(PENDING)
+  attempts    Int                @default(0)
+  maxAttempts Int                @default(5) @map("max_attempts")
+
+  expiresAt  DateTime  @map("expires_at") @db.Timestamptz(3)
+  consumedAt DateTime? @map("consumed_at") @db.Timestamptz(3)
+
+  requestIpTruncated String? @map("request_ip_truncated") @db.VarChar(45)
+  deviceInstallId    String? @map("device_install_id") @db.VarChar(128)
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([destination, purpose, createdAt])
+  @@index([status, expiresAt])
+  @@index([userId])
+  @@map("otp_challenges")
+}
+
+model Session {
+  id     String @id @default(uuid(7)) @db.Uuid
+  userId String @map("user_id") @db.Uuid
+
+  /// Refresh token stocke hashe, rotatif, avec famille pour revocation groupee
+  /// en cas de reutilisation detectee (section 21.3).
+  refreshTokenHash String  @unique @map("refresh_token_hash") @db.VarChar(512)
+  familyId         String  @map("family_id") @db.Uuid
+  replacedById     String? @unique @map("replaced_by_id") @db.Uuid
+
+  deviceId       String? @map("device_id") @db.Uuid
+  userAgent      String? @map("user_agent") @db.VarChar(512)
+  ipTruncated    String? @map("ip_truncated") @db.VarChar(45)
+  mfaSatisfiedAt DateTime? @map("mfa_satisfied_at") @db.Timestamptz(3)
+
+  expiresAt    DateTime  @map("expires_at") @db.Timestamptz(3)
+  lastUsedAt   DateTime? @map("last_used_at") @db.Timestamptz(3)
+  revokedAt    DateTime? @map("revoked_at") @db.Timestamptz(3)
+  revokedCause String?   @map("revoked_cause") @db.VarChar(120)
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  user   User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  device Device? @relation(fields: [deviceId], references: [id], onDelete: SetNull)
+
+  @@index([userId, revokedAt])
+  @@index([familyId])
+  @@index([expiresAt])
+  @@map("sessions")
+}
+
+model Device {
+  id     String  @id @default(uuid(7)) @db.Uuid
+  userId String? @map("user_id") @db.Uuid
+
+  /// Identifiant d'installation genere par l'application, stable par reinstallation.
+  installId String         @unique @map("install_id") @db.VarChar(128)
+  platform  DevicePlatform
+  appVersion String?       @map("app_version") @db.VarChar(40)
+  osVersion  String?       @map("os_version") @db.VarChar(40)
+  model      String?       @db.VarChar(80)
+
+  pushToken     String?   @map("push_token") @db.VarChar(512)
+  pushTokenAt   DateTime? @map("push_token_at") @db.Timestamptz(3)
+  lastSeenAt    DateTime? @map("last_seen_at") @db.Timestamptz(3)
+  trustedAt     DateTime? @map("trusted_at") @db.Timestamptz(3)
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  user     User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
+  sessions Session[]
+
+  @@index([userId])
+  @@map("devices")
+}
+
+model Consent {
+  id     String @id @default(uuid(7)) @db.Uuid
+  userId String @map("user_id") @db.Uuid
+
+  type ConsentType
+
+  /// Version de la politique acceptee, pour prouver a quoi l'utilisateur a consenti
+  /// (sections 8.2 et 23).
+  policyVersion String  @map("policy_version") @db.VarChar(40)
+  granted       Boolean
+  source        String  @db.VarChar(60)
+  ipTruncated   String? @map("ip_truncated") @db.VarChar(45)
+
+  grantedAt DateTime  @default(now()) @map("granted_at") @db.Timestamptz(3)
+  revokedAt DateTime? @map("revoked_at") @db.Timestamptz(3)
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, type, grantedAt])
+  @@map("consents")
+}
+
+// ---------------------------------------------------------------------------
+// Organisations et acces (section 8.2)
+// ---------------------------------------------------------------------------
+
+model Organization {
+  id String @id @default(uuid(7)) @db.Uuid
+
+  name      String             @db.VarChar(160)
+  slug      String             @unique @db.VarChar(180)
+  status    OrganizationStatus @default(DRAFT)
+  legalName String?            @map("legal_name") @db.VarChar(200)
+  taxId     String?            @map("tax_id") @db.VarChar(60)
+
+  contactPhoneE164 String  @map("contact_phone_e164") @db.VarChar(20)
+  contactEmail     String? @map("contact_email") @db.VarChar(320)
+
+  /// Devise verrouillee a XOF pour le marche initial (section 13.3).
+  currency String @default("XOF") @db.VarChar(3)
+
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
+  deletedAt DateTime? @map("deleted_at") @db.Timestamptz(3)
+
+  establishments      Establishment[]
+  members             OrganizationMember[]
+  verificationCases   VerificationCase[]
+  moduleEntitlements  ModuleEntitlement[]
+  subscriptions       Subscription[]
+  menus               Menu[]
+  products            Product[]
+  optionGroups        OptionGroup[]
+  tags                Tag[]
+  auditLogs           AuditLog[]
+  orders              Order[]
+
+  @@index([status])
+  @@map("organizations")
+}
+
+model Establishment {
+  id             String @id @default(uuid(7)) @db.Uuid
+  organizationId String @map("organization_id") @db.Uuid
+
+  name        String              @db.VarChar(160)
+  slug        String              @unique @db.VarChar(180)
+  status      EstablishmentStatus @default(DRAFT)
+  description String?             @db.VarChar(2000)
+  phoneE164   String?             @map("phone_e164") @db.VarChar(20)
+
+  /// Adressage ivoirien : commune, quartier et repere textuel (section 15.1).
+  city         String  @db.VarChar(120)
+  district     String? @db.VarChar(120)
+  addressLine  String? @map("address_line") @db.VarChar(300)
+  landmarkText String? @map("landmark_text") @db.VarChar(300)
+
+  /// Coordonnees autorales en WGS84. La colonne `location` en
+  /// geography(Point, 4326) est maintenue par un declencheur SQL et indexee en
+  /// GiST : elle reste la seule source utilisee pour ST_DWithin et le tri KNN.
+  latitude  Decimal @db.Decimal(9, 6)
+  longitude Decimal @db.Decimal(9, 6)
+  location  Unsupported("geography(Point, 4326)")?
+
+  /// Mode de stock exclusif par etablissement (section 14).
+  stockMode StockMode @default(NONE) @map("stock_mode")
+
+  timezone String @default("Africa/Abidjan") @db.VarChar(60)
+
+  averagePreparationMinutes Int?    @map("average_preparation_minutes")
+  coverImageUrl             String? @map("cover_image_url") @db.VarChar(1024)
+
+  publishedAt DateTime? @map("published_at") @db.Timestamptz(3)
+  verifiedAt  DateTime? @map("verified_at") @db.Timestamptz(3)
+
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
+  deletedAt DateTime? @map("deleted_at") @db.Timestamptz(3)
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  hours                EstablishmentHours[]
+  hoursExceptions      EstablishmentHoursException[]
+  services             RestaurantService[]
+  memberAssignments    MemberEstablishment[]
+  verificationCases    VerificationCase[]
+  moduleEntitlements   ModuleEntitlement[]
+  menus                Menu[]
+  products             Product[]
+  productAvailability  ProductAvailability[]
+  favorites            Favorite[]
+  follows              Follow[]
+  orders               Order[]
+
+  @@index([organizationId, status])
+  @@index([city, status])
+  @@index([status, publishedAt])
+  @@map("establishments")
+}
+
+model EstablishmentHours {
+  id              String @id @default(uuid(7)) @db.Uuid
+  establishmentId String @map("establishment_id") @db.Uuid
+
+  weekDay WeekDay @map("week_day")
+
+  /// Minutes depuis minuit en heure locale de l'etablissement. Un creneau qui
+  /// franchit minuit se termine au-dela de 1440 (service de nuit).
+  opensAtMinutes  Int @map("opens_at_minutes")
+  closesAtMinutes Int @map("closes_at_minutes")
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  establishment Establishment @relation(fields: [establishmentId], references: [id], onDelete: Cascade)
+
+  @@unique([establishmentId, weekDay, opensAtMinutes])
+  @@index([establishmentId, weekDay])
+  @@map("establishment_hours")
+}
+
+model EstablishmentHoursException {
+  id              String @id @default(uuid(7)) @db.Uuid
+  establishmentId String @map("establishment_id") @db.Uuid
+
+  /// Date locale de l'exception, sans composante horaire.
+  exceptionDate DateTime @map("exception_date") @db.Date
+  closed        Boolean  @default(true)
+
+  opensAtMinutes  Int?    @map("opens_at_minutes")
+  closesAtMinutes Int?    @map("closes_at_minutes")
+  reason          String? @db.VarChar(200)
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  establishment Establishment @relation(fields: [establishmentId], references: [id], onDelete: Cascade)
+
+  @@unique([establishmentId, exceptionDate])
+  @@map("establishment_hours_exceptions")
+}
+
+model RestaurantService {
+  id              String @id @default(uuid(7)) @db.Uuid
+  establishmentId String @map("establishment_id") @db.Uuid
+
+  type    ServiceType
+  enabled Boolean     @default(true)
+
+  /// Montant minimum de commande en FCFA entier (section 13.3).
+  minimumOrderAmount BigInt? @map("minimum_order_amount")
+  leadTimeMinutes    Int?    @map("lead_time_minutes")
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  establishment Establishment @relation(fields: [establishmentId], references: [id], onDelete: Cascade)
+
+  @@unique([establishmentId, type])
+  @@map("restaurant_services")
+}
+
+model Role {
+  id String @id @default(uuid(7)) @db.Uuid
+
+  /// Code stable utilise par le code applicatif : OWNER, MANAGER, CASHIER, WAITER,
+  /// KITCHEN, COURIER, ACCOUNTANT (section 9.1).
+  code        String  @unique @db.VarChar(40)
+  label       String  @db.VarChar(80)
+  description String? @db.VarChar(300)
+
+  /// Un role systeme ne peut pas etre modifie par un restaurant.
+  systemManaged Boolean @default(true) @map("system_managed")
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  permissions RolePermission[]
+  members     OrganizationMember[]
+
+  @@map("roles")
+}
+
+model Permission {
+  id String @id @default(uuid(7)) @db.Uuid
+
+  /// Permission atomique, par exemple `orders.accept` ou `payments.refund`.
+  /// La matrice de la section 9.1 est derivee de ces codes, jamais de conditions
+  /// dispersees dans le code.
+  code        String  @unique @db.VarChar(80)
+  domain      String  @db.VarChar(40)
+  description String  @db.VarChar(300)
+
+  /// Exige une reauthentification ou un MFA recent (section 9.2).
+  requiresReauth Boolean @default(false) @map("requires_reauth")
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  roles RolePermission[]
+
+  @@index([domain])
+  @@map("permissions")
+}
+
+model RolePermission {
+  roleId       String @map("role_id") @db.Uuid
+  permissionId String @map("permission_id") @db.Uuid
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  role       Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, permissionId])
+  @@index([permissionId])
+  @@map("role_permissions")
+}
+
+model OrganizationMember {
+  id             String @id @default(uuid(7)) @db.Uuid
+  organizationId String @map("organization_id") @db.Uuid
+  userId         String @map("user_id") @db.Uuid
+  roleId         String @map("role_id") @db.Uuid
+
+  status      MemberStatus @default(INVITED)
+  displayName String?      @map("display_name") @db.VarChar(120)
+
+  /// Plafond de remboursement en FCFA. NULL signifie aucune autorisation
+  /// specifique au-dela du role (section 9.1).
+  refundLimitAmount BigInt? @map("refund_limit_amount")
+
+  invitedAt  DateTime  @default(now()) @map("invited_at") @db.Timestamptz(3)
+  acceptedAt DateTime? @map("accepted_at") @db.Timestamptz(3)
+  revokedAt  DateTime? @map("revoked_at") @db.Timestamptz(3)
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role         Role         @relation(fields: [roleId], references: [id])
+
+  establishments MemberEstablishment[]
+
+  @@unique([organizationId, userId])
+  @@index([userId, status])
+  @@index([organizationId, status])
+  @@map("organization_members")
+}
+
+model MemberEstablishment {
+  memberId        String @map("member_id") @db.Uuid
+  establishmentId String @map("establishment_id") @db.Uuid
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  member        OrganizationMember @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  establishment Establishment      @relation(fields: [establishmentId], references: [id], onDelete: Cascade)
+
+  @@id([memberId, establishmentId])
+  @@index([establishmentId])
+  @@map("member_establishments")
+}
+
+model VerificationCase {
+  id              String  @id @default(uuid(7)) @db.Uuid
+  organizationId  String  @map("organization_id") @db.Uuid
+  establishmentId String? @map("establishment_id") @db.Uuid
+
+  status VerificationCaseStatus @default(OPEN)
+
+  submittedAt DateTime  @default(now()) @map("submitted_at") @db.Timestamptz(3)
+  reviewedAt  DateTime? @map("reviewed_at") @db.Timestamptz(3)
+
+  /// Utilisateur plateforme ayant statue. Non contraint par cle etrangere pour
+  /// preserver la trace si le compte interne disparait.
+  reviewedByUserId String? @map("reviewed_by_user_id") @db.Uuid
+  decisionReason   String? @map("decision_reason") @db.VarChar(1000)
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  organization  Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  establishment Establishment? @relation(fields: [establishmentId], references: [id], onDelete: Cascade)
+
+  documents VerificationDocument[]
+
+  @@index([status, submittedAt])
+  @@index([organizationId])
+  @@index([establishmentId])
+  @@map("verification_cases")
+}
+
+model VerificationDocument {
+  id                 String @id @default(uuid(7)) @db.Uuid
+  verificationCaseId String @map("verification_case_id") @db.Uuid
+
+  type VerificationDocumentType
+
+  /// Cle objet non previsible dans le stockage prive. Aucun document brut n'est
+  /// journalise ni servi sans URL temporaire (section 17).
+  storageKey  String @map("storage_key") @db.VarChar(512)
+  contentType String @map("content_type") @db.VarChar(120)
+  byteSize    Int    @map("byte_size")
+  checksum    String @db.VarChar(128)
+
+  scannedAt   DateTime? @map("scanned_at") @db.Timestamptz(3)
+  scanVerdict String?   @map("scan_verdict") @db.VarChar(40)
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  verificationCase VerificationCase @relation(fields: [verificationCaseId], references: [id], onDelete: Cascade)
+
+  @@index([verificationCaseId])
+  @@map("verification_documents")
+}
+
+// ---------------------------------------------------------------------------
+// Abonnements et entitlements (sections 8.2 et 30)
+// ---------------------------------------------------------------------------
+
+model SubscriptionPlan {
+  id String @id @default(uuid(7)) @db.Uuid
+
+  code        String  @unique @db.VarChar(40)
+  label       String  @db.VarChar(80)
+  description String? @db.VarChar(500)
+
+  /// Prix mensuel en FCFA entier. Aucun tarif commercial n'est invente ici :
+  /// les valeurs reelles sont saisies par la plateforme (section 36).
+  monthlyPriceAmount BigInt @default(0) @map("monthly_price_amount")
+  trialDays          Int    @default(0) @map("trial_days")
+  active             Boolean @default(true)
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  modules       PlanModule[]
+  subscriptions Subscription[]
+
+  @@map("subscription_plans")
+}
+
+model PlanModule {
+  planId String @map("plan_id") @db.Uuid
+
+  /// Code de module tel que `catalog.advanced` ou `cash.register` (section 30).
+  moduleCode String @map("module_code") @db.VarChar(60)
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  plan SubscriptionPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
+
+  @@id([planId, moduleCode])
+  @@map("plan_modules")
+}
+
+model Subscription {
+  id             String @id @default(uuid(7)) @db.Uuid
+  organizationId String @map("organization_id") @db.Uuid
+  planId         String @map("plan_id") @db.Uuid
+
+  status SubscriptionStatus @default(TRIALING)
+
+  currentPeriodStart DateTime  @map("current_period_start") @db.Timestamptz(3)
+  currentPeriodEnd   DateTime  @map("current_period_end") @db.Timestamptz(3)
+  trialEndsAt        DateTime? @map("trial_ends_at") @db.Timestamptz(3)
+  cancelledAt        DateTime? @map("cancelled_at") @db.Timestamptz(3)
+  suspendedAt        DateTime? @map("suspended_at") @db.Timestamptz(3)
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  organization Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  plan         SubscriptionPlan @relation(fields: [planId], references: [id])
+
+  @@index([organizationId, status])
+  @@index([currentPeriodEnd])
+  @@map("subscriptions")
+}
+
+model ModuleEntitlement {
+  id              String  @id @default(uuid(7)) @db.Uuid
+  organizationId  String  @map("organization_id") @db.Uuid
+  establishmentId String? @map("establishment_id") @db.Uuid
+
+  moduleCode String  @map("module_code") @db.VarChar(60)
+  enabled    Boolean @default(true)
+
+  /// Override administratif toujours motive et audite (section 30).
+  overrideReason    String?   @map("override_reason") @db.VarChar(300)
+  overrideByUserId  String?   @map("override_by_user_id") @db.Uuid
+  effectiveFrom     DateTime  @default(now()) @map("effective_from") @db.Timestamptz(3)
+  effectiveUntil    DateTime? @map("effective_until") @db.Timestamptz(3)
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  organization  Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  establishment Establishment? @relation(fields: [establishmentId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, establishmentId, moduleCode])
+  @@index([organizationId, enabled])
+  @@map("module_entitlements")
+}
+
+/// Prix mensuel par module, saisi depuis le back-office (section 3.4).
+model ModulePrice {
+  moduleCode         String  @id @map("module_code") @db.VarChar(60)
+  label              String  @db.VarChar(80)
+  included           Boolean @default(false)
+  sortOrder          Int     @default(0) @map("sort_order")
+  monthlyPriceAmount BigInt  @default(0) @map("monthly_price_amount")
+
+  updatedByUserId String? @map("updated_by_user_id") @db.Uuid
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  @@map("module_prices")
+}
+
+/// Parametres de facturation plateforme (une seule ligne, id = 1).
+model PlatformBilling {
+  id        Int     @id
+  currency  String  @db.VarChar(3)
+  published Boolean @default(false)
+  notice    String  @default("") @db.VarChar(500)
+
+  updatedByUserId String?  @map("updated_by_user_id") @db.Uuid
+  updatedAt       DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  @@map("platform_billing")
+}
+
+// ---------------------------------------------------------------------------
+// Catalogue (section 8.2)
+// ---------------------------------------------------------------------------
+
+model Menu {
+  id              String @id @default(uuid(7)) @db.Uuid
+  organizationId  String @map("organization_id") @db.Uuid
+  establishmentId String @map("establishment_id") @db.Uuid
+
+  name     String            @db.VarChar(120)
+  status   PublicationStatus @default(DRAFT)
+  position Int               @default(0)
+
+  publishedAt DateTime? @map("published_at") @db.Timestamptz(3)
+
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
+  deletedAt DateTime? @map("deleted_at") @db.Timestamptz(3)
+
+  organization  Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  establishment Establishment @relation(fields: [establishmentId], references: [id], onDelete: Cascade)
+
+  schedules  MenuSchedule[]
+  categories MenuCategory[]
+
+  @@index([establishmentId, status])
+  @@index([organizationId])
+  @@map("menus")
+}
+
+model MenuSchedule {
+  id     String @id @default(uuid(7)) @db.Uuid
+  menuId String @map("menu_id") @db.Uuid
+
+  weekDay         WeekDay @map("week_day")
+  startAtMinutes  Int     @map("start_at_minutes")
+  endAtMinutes    Int     @map("end_at_minutes")
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  menu Menu @relation(fields: [menuId], references: [id], onDelete: Cascade)
+
+  @@unique([menuId, weekDay, startAtMinutes])
+  @@map("menu_schedules")
+}
+
+model MenuCategory {
+  id     String @id @default(uuid(7)) @db.Uuid
+  menuId String @map("menu_id") @db.Uuid
+
+  name        String  @db.VarChar(120)
+  description String? @db.VarChar(500)
+  position    Int     @default(0)
+  visible     Boolean @default(true)
+
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
+  deletedAt DateTime? @map("deleted_at") @db.Timestamptz(3)
+
+  menu     Menu      @relation(fields: [menuId], references: [id], onDelete: Cascade)
+  products Product[]
+
+  @@index([menuId, position])
+  @@map("menu_categories")
+}
+
+model Product {
+  id              String  @id @default(uuid(7)) @db.Uuid
+  organizationId  String  @map("organization_id") @db.Uuid
+  establishmentId String  @map("establishment_id") @db.Uuid
+  categoryId      String? @map("category_id") @db.Uuid
+
+  name        String  @db.VarChar(160)
+  description String? @db.VarChar(1000)
+
+  /// Prix de base en FCFA entier. Le prix faisant foi d'une commande est copie
+  /// dans la ligne de commande (section 8.3).
+  basePriceAmount BigInt @map("base_price_amount")
+
+  status   PublicationStatus @default(DRAFT)
+  position Int               @default(0)
+
+  preparationMinutes Int?    @map("preparation_minutes")
+  imageUrl           String? @map("image_url") @db.VarChar(1024)
+  spicyLevel         Int?    @map("spicy_level")
+  vegetarian         Boolean @default(false)
+  halal              Boolean @default(false)
+
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
+  deletedAt DateTime? @map("deleted_at") @db.Timestamptz(3)
+
+  organization  Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  establishment Establishment @relation(fields: [establishmentId], references: [id], onDelete: Cascade)
+  category      MenuCategory? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+
+  images       ProductImage[]
+  availability ProductAvailability[]
+  optionGroups ProductOptionGroup[]
+  allergens    ProductAllergen[]
+  tags         ProductTag[]
+  priceHistory PriceHistory[]
+  orderItems   OrderItem[]
+
+  @@index([establishmentId, status])
+  @@index([categoryId, position])
+  @@index([organizationId])
+  @@map("products")
+}
+
+model ProductImage {
+  id        String @id @default(uuid(7)) @db.Uuid
+  productId String @map("product_id") @db.Uuid
+
+  storageKey String  @map("storage_key") @db.VarChar(512)
+  altText    String? @map("alt_text") @db.VarChar(300)
+  position   Int     @default(0)
+  width      Int?
+  height     Int?
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@index([productId, position])
+  @@map("product_images")
+}
+
+model ProductAvailability {
+  id              String @id @default(uuid(7)) @db.Uuid
+  productId       String @map("product_id") @db.Uuid
+  establishmentId String @map("establishment_id") @db.Uuid
+
+  status ProductAvailabilityStatus @default(AVAILABLE)
+
+  /// Rupture temporaire : la disponibilite redevient AVAILABLE apres cette date.
+  unavailableUntil DateTime? @map("unavailable_until") @db.Timestamptz(3)
+  reason           String?   @db.VarChar(200)
+
+  /// Derniere ecriture gagnante avec audit, conformement a la politique de
+  /// conflit hors ligne pour la disponibilite (section 16.4).
+  changedAt        DateTime  @default(now()) @map("changed_at") @db.Timestamptz(3)
+  changedByUserId  String?   @map("changed_by_user_id") @db.Uuid
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  product       Product       @relation(fields: [productId], references: [id], onDelete: Cascade)
+  establishment Establishment @relation(fields: [establishmentId], references: [id], onDelete: Cascade)
+
+  @@unique([productId, establishmentId])
+  @@index([establishmentId, status])
+  @@map("product_availability")
+}
+
+model OptionGroup {
+  id             String @id @default(uuid(7)) @db.Uuid
+  organizationId String @map("organization_id") @db.Uuid
+
+  name          String              @db.VarChar(120)
+  selectionType OptionSelectionType @map("selection_type")
+  required      Boolean             @default(false)
+  minSelections Int                 @default(0) @map("min_selections")
+  maxSelections Int?                @map("max_selections")
+
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
+  deletedAt DateTime? @map("deleted_at") @db.Timestamptz(3)
+
+  organization Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  options      Option[]
+  products     ProductOptionGroup[]
+
+  @@index([organizationId])
+  @@map("option_groups")
+}
+
+model Option {
+  id            String @id @default(uuid(7)) @db.Uuid
+  optionGroupId String @map("option_group_id") @db.Uuid
+
+  name String @db.VarChar(120)
+
+  /// Supplement en FCFA entier, jamais negatif.
+  priceDeltaAmount BigInt  @default(0) @map("price_delta_amount")
+  position         Int     @default(0)
+  available        Boolean @default(true)
+
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
+  deletedAt DateTime? @map("deleted_at") @db.Timestamptz(3)
+
+  optionGroup OptionGroup @relation(fields: [optionGroupId], references: [id], onDelete: Cascade)
+
+  @@index([optionGroupId, position])
+  @@map("options")
+}
+
+model ProductOptionGroup {
+  productId     String @map("product_id") @db.Uuid
+  optionGroupId String @map("option_group_id") @db.Uuid
+
+  position Int @default(0)
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  product     Product     @relation(fields: [productId], references: [id], onDelete: Cascade)
+  optionGroup OptionGroup @relation(fields: [optionGroupId], references: [id], onDelete: Cascade)
+
+  @@id([productId, optionGroupId])
+  @@index([optionGroupId])
+  @@map("product_option_groups")
+}
+
+model Tag {
+  id             String  @id @default(uuid(7)) @db.Uuid
+  organizationId String? @map("organization_id") @db.Uuid
+
+  /// Un tag sans organisation est un tag plateforme partage (type de cuisine).
+  code  String @db.VarChar(60)
+  label String @db.VarChar(80)
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  organization Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  products     ProductTag[]
+
+  @@unique([organizationId, code])
+  @@map("tags")
+}
+
+model ProductTag {
+  productId String @map("product_id") @db.Uuid
+  tagId     String @map("tag_id") @db.Uuid
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  tag     Tag     @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([productId, tagId])
+  @@index([tagId])
+  @@map("product_tags")
+}
+
+model Allergen {
+  id String @id @default(uuid(7)) @db.Uuid
+
+  code  String @unique @db.VarChar(40)
+  label String @db.VarChar(80)
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  products ProductAllergen[]
+
+  @@map("allergens")
+}
+
+model ProductAllergen {
+  productId  String @map("product_id") @db.Uuid
+  allergenId String @map("allergen_id") @db.Uuid
+
+  /// Allergene declare par le restaurant, jamais garanti par la plateforme.
+  declaredByUserId String?  @map("declared_by_user_id") @db.Uuid
+  createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  product  Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  allergen Allergen @relation(fields: [allergenId], references: [id], onDelete: Cascade)
+
+  @@id([productId, allergenId])
+  @@index([allergenId])
+  @@map("product_allergens")
+}
+
+model PriceHistory {
+  id        String @id @default(uuid(7)) @db.Uuid
+  productId String @map("product_id") @db.Uuid
+
+  /// Historique append-only : une correction est une nouvelle ligne (section 8.1).
+  previousAmount BigInt? @map("previous_amount")
+  newAmount      BigInt  @map("new_amount")
+
+  changedByUserId String?  @map("changed_by_user_id") @db.Uuid
+  reason          String?  @db.VarChar(200)
+  changedAt       DateTime @default(now()) @map("changed_at") @db.Timestamptz(3)
+
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@index([productId, changedAt])
+  @@map("price_history")
+}
+
+// ---------------------------------------------------------------------------
+// Engagement (section 8.2)
+// ---------------------------------------------------------------------------
+
+model Favorite {
+  userId          String @map("user_id") @db.Uuid
+  establishmentId String @map("establishment_id") @db.Uuid
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  user          User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  establishment Establishment @relation(fields: [establishmentId], references: [id], onDelete: Cascade)
+
+  @@id([userId, establishmentId])
+  @@index([establishmentId])
+  @@map("favorites")
+}
+
+model Follow {
+  userId          String @map("user_id") @db.Uuid
+  establishmentId String @map("establishment_id") @db.Uuid
+
+  notifyEvents    Boolean @default(true) @map("notify_events")
+  notifyPromotions Boolean @default(false) @map("notify_promotions")
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  user          User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  establishment Establishment @relation(fields: [establishmentId], references: [id], onDelete: Cascade)
+
+  @@id([userId, establishmentId])
+  @@index([establishmentId])
+  @@map("follows")
+}
+
+// ---------------------------------------------------------------------------
+// Plateforme : audit, outbox, idempotence, configuration (section 8.2)
+// ---------------------------------------------------------------------------
+
+model AuditLog {
+  id String @id @default(uuid(7)) @db.Uuid
+
+  /// Journal append-only, separe des logs techniques. Aucune suppression n'est
+  /// autorisee, y compris par un administrateur (sections 22.1 et 31).
+  organizationId String? @map("organization_id") @db.Uuid
+  actorUserId    String? @map("actor_user_id") @db.Uuid
+
+  action       String  @db.VarChar(80)
+  resourceType String  @map("resource_type") @db.VarChar(60)
+  resourceId   String? @map("resource_id") @db.VarChar(80)
+
+  /// Etats avant et apres, expurges de toute donnee sensible (section 22).
+  beforeState Json? @map("before_state")
+  afterState  Json? @map("after_state")
+
+  reason          String? @db.VarChar(500)
+  requestId       String? @map("request_id") @db.VarChar(64)
+  ipTruncated     String? @map("ip_truncated") @db.VarChar(45)
+  deviceInstallId String? @map("device_install_id") @db.VarChar(128)
+
+  occurredAt DateTime @default(now()) @map("occurred_at") @db.Timestamptz(3)
+
+  organization Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  actor        User?         @relation(fields: [actorUserId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, occurredAt])
+  @@index([actorUserId, occurredAt])
+  @@index([resourceType, resourceId])
+  @@index([action, occurredAt])
+  @@map("audit_logs")
+}
+
+model OutboxEvent {
+  id String @id @default(uuid(7)) @db.Uuid
+
+  /// Outbox transactionnelle : l'evenement est ecrit dans la meme transaction que
+  /// le changement metier, puis publie par un worker (sections 11.1 et 4.1).
+  aggregateType String @map("aggregate_type") @db.VarChar(60)
+  aggregateId   String @map("aggregate_id") @db.VarChar(80)
+  eventType     String @map("event_type") @db.VarChar(80)
+  eventVersion  Int    @default(1) @map("event_version")
+
+  payload Json
+
+  status      OutboxEventStatus @default(PENDING)
+  attempts    Int               @default(0)
+  lastError   String?           @map("last_error") @db.VarChar(1000)
+  availableAt DateTime          @default(now()) @map("available_at") @db.Timestamptz(3)
+  publishedAt DateTime?         @map("published_at") @db.Timestamptz(3)
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  @@index([status, availableAt])
+  @@index([aggregateType, aggregateId])
+  @@map("outbox_events")
+}
+
+model IdempotencyKey {
+  id String @id @default(uuid(7)) @db.Uuid
+
+  /// Cle fournie par le client, portee au couple (utilisateur, endpoint) pour
+  /// eviter toute collision entre comptes (section 10.1).
+  key      String @db.VarChar(200)
+  scope    String @db.VarChar(120)
+  userId   String? @map("user_id") @db.Uuid
+
+  /// Empreinte de la requete : une meme cle avec un corps different est un conflit.
+  requestHash String @map("request_hash") @db.VarChar(128)
+
+  status         IdempotencyStatus @default(IN_PROGRESS)
+  responseStatus Int?              @map("response_status")
+  responseBody   Json?             @map("response_body")
+
+  lockedAt  DateTime  @default(now()) @map("locked_at") @db.Timestamptz(3)
+  expiresAt DateTime  @map("expires_at") @db.Timestamptz(3)
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  @@unique([scope, key, userId])
+  @@index([expiresAt])
+  @@map("idempotency_keys")
+}
+
+model FeatureFlag {
+  id String @id @default(uuid(7)) @db.Uuid
+
+  code        String  @unique @db.VarChar(80)
+  description String  @db.VarChar(300)
+  enabled     Boolean @default(false)
+
+  /// Activation ciblee par organisation, sans deploiement (section 27.2).
+  enabledOrganizationIds String[] @default([]) @map("enabled_organization_ids") @db.Uuid
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  @@map("feature_flags")
+}
+
+/// Compte interne de la plateforme. Aucun compte administrateur partage
+/// (specification section 31) : chaque membre du staff est nominatif.
+model PlatformStaff {
+  id     String @id @default(uuid(7)) @db.Uuid
+  userId String @unique @map("user_id") @db.Uuid
+
+  role PlatformStaffRole
+
+  grantedByUserId String?   @map("granted_by_user_id") @db.Uuid
+  grantedAt       DateTime  @default(now()) @map("granted_at") @db.Timestamptz(3)
+  revokedAt       DateTime? @map("revoked_at") @db.Timestamptz(3)
+  reason          String?   @db.VarChar(300)
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([role, revokedAt])
+  @@map("platform_staff")
+}
+
+model SystemSetting {
+  key String @id @db.VarChar(120)
+
+  value       Json
+  description String? @db.VarChar(300)
+
+  updatedByUserId String?  @map("updated_by_user_id") @db.Uuid
+  updatedAt       DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@map("system_settings")
+}
+
+model Order {
+  id              String @id @default(uuid(7)) @db.Uuid
+  publicRef       String @unique @map("public_ref") @db.VarChar(16)
+  organizationId  String @map("organization_id") @db.Uuid
+  establishmentId String @map("establishment_id") @db.Uuid
+  customerUserId  String @map("customer_user_id") @db.Uuid
+
+  status  OrderStatus  @default(PENDING_RESTAURANT)
+  service OrderService @default(TAKEAWAY)
+
+  customerName  String  @map("customer_name") @db.VarChar(160)
+  customerPhone String  @map("customer_phone") @db.VarChar(24)
+  notes         String? @db.VarChar(500)
+
+  subtotalAmount BigInt @map("subtotal_amount")
+  totalAmount    BigInt @map("total_amount")
+
+  placedAt  DateTime  @default(now()) @map("placed_at") @db.Timestamptz(3)
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  organization  Organization  @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  establishment Establishment @relation(fields: [establishmentId], references: [id], onDelete: Restrict)
+  customer      User          @relation(fields: [customerUserId], references: [id], onDelete: Restrict)
+  items         OrderItem[]
+
+  @@index([customerUserId, placedAt])
+  @@index([establishmentId, status, placedAt])
+  @@index([organizationId, status])
+  @@map("orders")
+}
+
+model OrderItem {
+  id        String @id @default(uuid(7)) @db.Uuid
+  orderId   String @map("order_id") @db.Uuid
+  productId String @map("product_id") @db.Uuid
+
+  nameSnapshot String @map("name_snapshot") @db.VarChar(160)
+  quantity     Int
+  unitAmount   BigInt @map("unit_amount")
+  lineAmount   BigInt @map("line_amount")
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  order   Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id], onDelete: Restrict)
+
+  @@index([orderId])
+  @@map("order_items")
+}

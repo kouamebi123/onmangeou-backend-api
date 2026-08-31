@@ -1,0 +1,19 @@
+node_modules/
+dist/
+coverage/
+*.tsbuildinfo
+.eslintcache
+
+# Secrets et configuration locale : jamais commites (section 22).
+.env
+.env.*
+!.env.example
+
+# Client Prisma genere
+src/infrastructure/prisma/generated/
+
+# Contrat OpenAPI genere : publie comme artefact de release (section 6.6).
+openapi/onmangeou-v1.json
+
+.DS_Store
+*.log
