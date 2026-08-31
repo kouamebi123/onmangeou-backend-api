@@ -519,6 +519,7 @@ export class OrganizationsService {
       landmarkText: string | null;
       stockMode: string;
       averagePreparationMinutes: number | null;
+      coverImageUrl: string | null;
       publishedAt: Date | null;
       verifiedAt: Date | null;
       hasTerrace: boolean;
@@ -549,6 +550,7 @@ export class OrganizationsService {
         landmarkText: true,
         stockMode: true,
         averagePreparationMinutes: true,
+        coverImageUrl: true,
         publishedAt: true,
         verifiedAt: true,
       },

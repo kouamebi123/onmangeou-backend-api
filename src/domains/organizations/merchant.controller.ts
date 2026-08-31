@@ -84,6 +84,7 @@ export class MerchantController {
       landmarkText: string | null;
       stockMode: string;
       averagePreparationMinutes: number | null;
+      coverImageUrl: string | null;
       publishedAt: string | null;
       verifiedAt: string | null;
       hasTerrace: boolean;

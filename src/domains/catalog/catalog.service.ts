@@ -28,6 +28,7 @@ export interface MerchantProductView {
   vegetarian: boolean;
   halal: boolean;
   spicyLevel: number | null;
+  imageUrl: string | null;
 }
 
 /**
@@ -421,6 +422,7 @@ export class CatalogService {
         vegetarian: true,
         halal: true,
         spicyLevel: true,
+        imageUrl: true,
         availability: { select: { status: true } },
       },
     });
@@ -437,6 +439,7 @@ export class CatalogService {
       vegetarian: product.vegetarian,
       halal: product.halal,
       spicyLevel: product.spicyLevel,
+      imageUrl: product.imageUrl,
     }));
   }
 

@@ -119,6 +119,15 @@ export class AppConfigService {
   get sentryDsn(): string | undefined {
     return this.get('SENTRY_DSN');
   }
+
+  get media(): { driver: string; localRoot: string; publicBaseUrl: string } {
+    return {
+      driver: this.get('MEDIA_STORAGE_DRIVER'),
+      localRoot: this.get('MEDIA_LOCAL_ROOT'),
+      publicBaseUrl:
+        this.get('MEDIA_PUBLIC_BASE_URL') ?? `${this.apiBaseUrl.replace(/\/$/, '')}/api/v1/media`,
+    };
+  }
 }
 
 /**

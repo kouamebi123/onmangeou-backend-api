@@ -26,6 +26,7 @@ import { OrganizationsModule } from './domains/organizations/organizations.modul
 import { OutboxModule } from './infrastructure/outbox/outbox.module';
 import { PrismaModule } from './infrastructure/prisma/prisma.module';
 import { RedisModule } from './infrastructure/redis/redis.module';
+import { MediaModule } from './infrastructure/media/media.module';
 import { JwtModule } from '@nestjs/jwt';
 
 /**
@@ -42,6 +43,7 @@ import { JwtModule } from '@nestjs/jwt';
     TimeModule,
     PrismaModule,
     RedisModule,
+    MediaModule,
     OutboxModule,
     AuditModule,
     EntitlementsModule,

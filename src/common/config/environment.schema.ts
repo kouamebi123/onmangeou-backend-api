@@ -133,6 +133,18 @@ export class EnvironmentSchema {
   @IsString()
   S3_PUBLIC_BASE_URL?: string;
 
+  @IsString()
+  @IsNotEmpty()
+  MEDIA_STORAGE_DRIVER = 'local';
+
+  @IsString()
+  @IsNotEmpty()
+  MEDIA_LOCAL_ROOT = '/data/uploads';
+
+  @IsOptional()
+  @IsString()
+  MEDIA_PUBLIC_BASE_URL?: string;
+
   @IsUrl({ require_tld: false })
   JWT_ISSUER!: string;
 
