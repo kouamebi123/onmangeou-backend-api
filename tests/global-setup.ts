@@ -17,18 +17,16 @@ import { config as loadEnvFile } from 'dotenv';
 export default function setup(): void {
   const envPath = resolve(process.cwd(), '.env.test');
 
-  if (!existsSync(envPath)) {
-    throw new Error(
-      "Fichier .env.test absent. Les tests d'integration exigent une base dediee : copier .env.example et viser le service postgres-test.",
-    );
+  if (existsSync(envPath)) {
+    loadEnvFile({ path: envPath, override: true, quiet: true });
   }
-
-  loadEnvFile({ path: envPath, override: true, quiet: true });
 
   const databaseUrl = process.env['DATABASE_URL'];
 
   if (databaseUrl === undefined || databaseUrl.length === 0) {
-    throw new Error('DATABASE_URL est absent de .env.test.');
+    throw new Error(
+      "DATABASE_URL est absente. Fournir un fichier .env.test en local ou une variable d'environnement en CI.",
+    );
   }
 
   assertDisposableDatabase(databaseUrl);

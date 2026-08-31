@@ -46,7 +46,7 @@
     "prisma/**/*",
     "scripts/**/*",
     "prisma.config.ts",
-    "vitest.config.ts"
+    "vitest.config.mts"
   ],
   "exclude": ["node_modules", "dist"]
 }
