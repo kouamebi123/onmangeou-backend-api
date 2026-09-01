@@ -15,6 +15,7 @@ if (compile.status !== 0) process.exit(compile.status ?? 1);
 for (const [entry, output] of [
   ['dist/main.js', 'dist/run.cjs'],
   ['dist/tools/import-demo-media.js', 'dist/import-demo-media.cjs'],
+  ['dist/tools/import-restaurant-covers.js', 'dist/import-restaurant-covers.cjs'],
 ]) {
   esbuild.buildSync({
     absWorkingDir: root,

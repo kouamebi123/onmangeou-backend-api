@@ -14,6 +14,21 @@ export const DEMO_SLUGS = [
   'pontchaillou-poulet-rennes',
 ] as const;
 
+export const DEMO_COVER_IMAGES: Record<string, string> = {
+  'chez-tante-marie-cocody-angre': 'cover-tante',
+  'maquis-du-plateau-centre': 'cover-plateau',
+  'maquis-gaston-tardif-rennes': 'cover-gaston',
+  'chez-awa-beauregard-rennes': 'cover-awa',
+  'attieke-republique-rennes': 'cover-republique',
+  'le-thabor-braise-rennes': 'cover-thabor',
+  'grillades-du-colombier-rennes': 'cover-colombier',
+  'bar-ivoire-saint-helier-rennes': 'cover-bar',
+  'alloco-night-cleunay-rennes': 'cover-cleunay',
+  'riz-gras-maurepas-rennes': 'cover-maurepas',
+  'cafe-bissap-jeanne-darc-rennes': 'cover-bissap',
+  'pontchaillou-poulet-rennes': 'cover-pontchaillou',
+};
+
 export const DEMO_DISH_IMAGES: Record<string, string> = {
   'Poulet braise entier': 'poulet-entier',
   'Poulet braisé attiéké': 'poulet-attieke',

@@ -6,7 +6,12 @@ import { AppModule } from '../app.module';
 import { AppConfigService } from '../common/config/app-config.service';
 import { PrismaService } from '../infrastructure/prisma/prisma.service';
 import { MEDIA_STORAGE, type MediaStorage } from '../infrastructure/media/media-storage.port';
-import { DEMO_DISH_IMAGES, DEMO_SLUGS, isReplaceableDemoImage } from './demo-media-manifest';
+import {
+  DEMO_COVER_IMAGES,
+  DEMO_DISH_IMAGES,
+  DEMO_SLUGS,
+  isReplaceableDemoImage,
+} from './demo-media-manifest';
 
 async function main() {
   const app = await NestFactory.createApplicationContext(AppModule, { logger: false });
@@ -30,7 +35,12 @@ async function main() {
     }> = [];
     for (const item of establishments) {
       if (isReplaceableDemoImage(item.coverImageUrl)) {
-        plan.push({ kind: 'establishment', id: item.id, previousUrl: item.coverImageUrl, image: 'maquis' });
+        plan.push({
+          kind: 'establishment',
+          id: item.id,
+          previousUrl: item.coverImageUrl,
+          image: DEMO_COVER_IMAGES[item.slug]!,
+        });
       }
     }
     for (const item of products) {

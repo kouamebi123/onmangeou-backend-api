@@ -1,0 +1,98 @@
+[
+  {
+    "id": "01a05940-0570-7109-b9f1-c7eff1277d30",
+    "image": "cover-tante",
+    "name": "Chez Tante Marie - Cocody Angre",
+    "previousUrl": "https://onmangeou-backend-api-production.up.railway.app/api/v1/media/9d02c2ae-1f6f-456b-8a07-1ab0c0d4c3af.webp",
+    "slug": "chez-tante-marie-cocody-angre",
+    "sha256": "d3ce61bd6103847e2a812416ba63d9b50448e67c97c596d4d850c40abe1e2690"
+  },
+  {
+    "id": "01a05940-05a3-7548-8fa6-fae9c05b11af",
+    "image": "cover-plateau",
+    "name": "Maquis du Plateau",
+    "previousUrl": "https://onmangeou-backend-api-production.up.railway.app/api/v1/media/c2a1aa5f-d3bf-477e-9998-bb736cb2c944.webp",
+    "slug": "maquis-du-plateau-centre",
+    "sha256": "0d32f63d1fdf2d98d8001569e996a5e3ccb84b2ead68d80994b25a960ead7bc0"
+  },
+  {
+    "id": "01a05940-05b0-7659-8f7a-72b05a1987c1",
+    "image": "cover-gaston",
+    "name": "Maquis Gaston Tardif",
+    "previousUrl": "https://onmangeou-backend-api-production.up.railway.app/api/v1/media/0c8e5098-3048-424a-bf9a-ff958ffa949d.webp",
+    "slug": "maquis-gaston-tardif-rennes",
+    "sha256": "a4ddeadca16c7da7f0c76835685bfb8fb887b100d2b3c1890793bda35e3a4ddf"
+  },
+  {
+    "id": "01a05940-05ca-71a6-8496-1667097782a8",
+    "image": "cover-awa",
+    "name": "Chez Awa Beauregard",
+    "previousUrl": "https://onmangeou-backend-api-production.up.railway.app/api/v1/media/21357c61-c788-42f2-a3e8-b05906ee9cf9.webp",
+    "slug": "chez-awa-beauregard-rennes",
+    "sha256": "43f732bb52da0ff7f4adc7b97dfb298edb05686a23bbb0cbc94be501202f0ccf"
+  },
+  {
+    "id": "01a05940-05db-719c-ad89-0b651f4d7fe7",
+    "image": "cover-republique",
+    "name": "Attiéké République",
+    "previousUrl": "https://onmangeou-backend-api-production.up.railway.app/api/v1/media/2f62fd59-02c9-4d58-969e-7c434126ccf5.webp",
+    "slug": "attieke-republique-rennes",
+    "sha256": "10fac8cdf9f4d136dd9396f25ab7fda6095ca7ce31411db4ff91b188ae21b2e1"
+  },
+  {
+    "id": "01a05940-05ee-7333-b2f1-2551ffa954bd",
+    "image": "cover-thabor",
+    "name": "Le Thabor Braisé",
+    "previousUrl": "https://onmangeou-backend-api-production.up.railway.app/api/v1/media/1875fd2b-c6e2-4ae7-95ec-c76710117ab4.webp",
+    "slug": "le-thabor-braise-rennes",
+    "sha256": "bef40b1e345d0a77b98788f99127b7b5832b6f89658586269c8d604160117109"
+  },
+  {
+    "id": "01a05940-05ff-747e-bd2a-583c320bb50f",
+    "image": "cover-colombier",
+    "name": "Grillades du Colombier",
+    "previousUrl": "https://onmangeou-backend-api-production.up.railway.app/api/v1/media/b46b1c7e-66a0-4cfc-9156-3606b1af17c1.webp",
+    "slug": "grillades-du-colombier-rennes",
+    "sha256": "d88666c606aca066bf2635b0d237c46a9670c14ad179d6b50110c950a538b902"
+  },
+  {
+    "id": "01a05940-060e-701a-af86-19cbfbd2af75",
+    "image": "cover-bar",
+    "name": "Bar d’Ivoire Saint-Hélier",
+    "previousUrl": "https://onmangeou-backend-api-production.up.railway.app/api/v1/media/bffd8661-fafe-4530-b1c1-0a606cbae94c.webp",
+    "slug": "bar-ivoire-saint-helier-rennes",
+    "sha256": "71c2f95c8ecc876b590b8ecb3d5bd6ad687f72e460b5e9d9d48beea2fa88c7df"
+  },
+  {
+    "id": "01a05940-061c-759f-8bcb-34adf8046c77",
+    "image": "cover-cleunay",
+    "name": "Alloco Night Cleunay",
+    "previousUrl": "https://onmangeou-backend-api-production.up.railway.app/api/v1/media/5bc075c7-b66b-4e50-aaf9-b214486057d5.webp",
+    "slug": "alloco-night-cleunay-rennes",
+    "sha256": "a08075d51c6de5eeb23106edda49496219cf967a85fd5f16b34823722b947107"
+  },
+  {
+    "id": "01a05940-062a-743b-a64e-033cd3d42310",
+    "image": "cover-maurepas",
+    "name": "Riz Gras Maurepas",
+    "previousUrl": "https://onmangeou-backend-api-production.up.railway.app/api/v1/media/36b4b930-75f2-4440-a480-b6accdccb4f6.webp",
+    "slug": "riz-gras-maurepas-rennes",
+    "sha256": "3910c58dbe5930fc09cfddf5943e292d98b820c4db045e0c130512b175ef528e"
+  },
+  {
+    "id": "01a05940-0636-7490-841c-42c2cff23bda",
+    "image": "cover-bissap",
+    "name": "Café Bissap Jeanne d’Arc",
+    "previousUrl": "https://onmangeou-backend-api-production.up.railway.app/api/v1/media/fbbe1169-694f-4142-b25e-5dcc96b3840d.webp",
+    "slug": "cafe-bissap-jeanne-darc-rennes",
+    "sha256": "f68b1f0cba8a32691484bce782bdbda48bdeb061d8baf840f4a191c23f881127"
+  },
+  {
+    "id": "01a05940-0644-779a-9182-31c1a6053623",
+    "image": "cover-pontchaillou",
+    "name": "Pontchaillou Poulet",
+    "previousUrl": "https://onmangeou-backend-api-production.up.railway.app/api/v1/media/2d255f33-1bb1-4c38-b2e9-811969e98e9f.webp",
+    "slug": "pontchaillou-poulet-rennes",
+    "sha256": "edc9bbdb3780bbd4614055e2830853edb1936a55948602447b8f021f6999c49a"
+  }
+]

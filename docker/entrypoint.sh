@@ -26,4 +26,8 @@ if [ "$IMPORT_DEMO_MEDIA_ON_START" = "apply" ]; then
   node --no-experimental-require-module dist/import-demo-media.cjs --apply
 fi
 
+if [ "$IMPORT_RESTAURANT_COVERS_ON_START" = "apply-v1" ]; then
+  node --no-experimental-require-module dist/import-restaurant-covers.cjs --apply
+fi
+
 exec node --no-experimental-require-module dist/run.cjs
