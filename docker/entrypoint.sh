@@ -20,4 +20,10 @@ if [ -n "$DATABASE_URL" ]; then
   fi
 fi
 
+# One-shot production maintenance. The importer is allowlisted and idempotent:
+# it only replaces missing/Unsplash media on known demo fixtures.
+if [ "$IMPORT_DEMO_MEDIA_ON_START" = "apply" ]; then
+  node --no-experimental-require-module dist/import-demo-media.cjs --apply
+fi
+
 exec node --no-experimental-require-module dist/run.cjs
