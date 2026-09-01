@@ -58,10 +58,10 @@ export class CreateOrderDto {
   @MaxLength(500)
   notes?: string;
 
-  @ApiPropertyOptional({ enum: ['CASH', 'WAVE', 'ORANGE_MONEY', 'MTN', 'MOOV', 'CARD'] })
+  @ApiPropertyOptional({ enum: ['CASH', 'WAVE', 'WERO', 'ORANGE_MONEY', 'MTN', 'MOOV', 'CARD'] })
   @IsOptional()
-  @IsEnum(['CASH', 'WAVE', 'ORANGE_MONEY', 'MTN', 'MOOV', 'CARD'])
-  paymentMethod?: 'CASH' | 'WAVE' | 'ORANGE_MONEY' | 'MTN' | 'MOOV' | 'CARD';
+  @IsEnum(['CASH', 'WAVE', 'WERO', 'ORANGE_MONEY', 'MTN', 'MOOV', 'CARD'])
+  paymentMethod?: 'CASH' | 'WAVE' | 'WERO' | 'ORANGE_MONEY' | 'MTN' | 'MOOV' | 'CARD';
 
   @ApiPropertyOptional({ enum: ['TAKEAWAY', 'DINE_IN', 'DELIVERY'] })
   @IsOptional()

@@ -49,6 +49,7 @@ export interface OrderView {
   establishmentSlug: string;
   status: OrderStatus;
   service: OrderService;
+  paymentMethod: string;
   customerName: string;
   customerPhone: string;
   notes: string | null;
@@ -63,6 +64,7 @@ interface OrderRow {
   establishment_id: string;
   status: OrderStatus;
   service: OrderService;
+  payment_method: string;
   customer_name: string;
   customer_phone: string;
   notes: string | null;
@@ -239,7 +241,7 @@ export class OrdersService {
 
   async listMine(actor: AuthenticatedActor): Promise<OrderView[]> {
     const rows = await this.prisma.$queryRaw<OrderRow[]>`
-      SELECT o.id, o.public_ref, o.establishment_id, o.status, o.service,
+      SELECT o.id, o.public_ref, o.establishment_id, o.status, o.service, o.payment_method,
              o.customer_name, o.customer_phone, o.notes, o.total_amount, o.placed_at,
              e.name AS establishment_name, e.slug AS establishment_slug
       FROM orders o
@@ -294,7 +296,7 @@ export class OrdersService {
         : Prisma.sql`FALSE`;
 
     const rows = await this.prisma.$queryRaw<OrderRow[]>`
-      SELECT o.id, o.public_ref, o.establishment_id, o.status, o.service,
+      SELECT o.id, o.public_ref, o.establishment_id, o.status, o.service, o.payment_method,
              o.customer_name, o.customer_phone, o.notes, o.total_amount, o.placed_at,
              e.name AS establishment_name, e.slug AS establishment_slug
       FROM orders o
@@ -371,7 +373,7 @@ export class OrdersService {
       ? Prisma.sql`AND o.customer_user_id = ${filter.customerUserId}::uuid`
       : Prisma.sql``;
     const rows = await this.prisma.$queryRaw<OrderRow[]>`
-      SELECT o.id, o.public_ref, o.establishment_id, o.status, o.service,
+      SELECT o.id, o.public_ref, o.establishment_id, o.status, o.service, o.payment_method,
              o.customer_name, o.customer_phone, o.notes, o.total_amount, o.placed_at,
              e.name AS establishment_name, e.slug AS establishment_slug
       FROM orders o
@@ -415,6 +417,7 @@ export class OrdersService {
       establishmentSlug: order.establishment_slug,
       status: order.status,
       service: order.service,
+      paymentMethod: order.payment_method,
       customerName: order.customer_name,
       customerPhone: order.customer_phone,
       notes: order.notes,

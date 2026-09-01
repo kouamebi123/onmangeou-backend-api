@@ -10,7 +10,7 @@ RUN apt-get update -y \
 WORKDIR /app
 
 FROM base AS deps
-COPY package.json pnpm-lock.yaml .npmrc prisma.config.ts ./
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc prisma.config.ts ./
 COPY prisma ./prisma
 RUN pnpm install --frozen-lockfile
 
@@ -26,6 +26,7 @@ ENV APP_ENV=local
 ENV PORT=3000
 WORKDIR /app
 COPY --from=build /app/dist ./dist
+COPY --from=build /app/assets/demo-media ./assets/demo-media
 COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/prisma ./prisma
 COPY --from=build /app/prisma.config.ts ./prisma.config.ts

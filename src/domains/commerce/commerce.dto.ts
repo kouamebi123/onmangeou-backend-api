@@ -24,9 +24,9 @@ export class CreatePaymentIntentDto {
   @IsUUID()
   orderId!: string;
 
-  @ApiProperty({ enum: ['WAVE', 'ORANGE_MONEY', 'MTN', 'MOOV', 'CARD'] })
-  @IsEnum(['WAVE', 'ORANGE_MONEY', 'MTN', 'MOOV', 'CARD'])
-  provider!: 'WAVE' | 'ORANGE_MONEY' | 'MTN' | 'MOOV' | 'CARD';
+  @ApiProperty({ enum: ['WAVE', 'WERO', 'ORANGE_MONEY', 'MTN', 'MOOV', 'CARD'] })
+  @IsEnum(['WAVE', 'WERO', 'ORANGE_MONEY', 'MTN', 'MOOV', 'CARD'])
+  provider!: 'WAVE' | 'WERO' | 'ORANGE_MONEY' | 'MTN' | 'MOOV' | 'CARD';
 }
 
 export class SandboxWebhookDto {

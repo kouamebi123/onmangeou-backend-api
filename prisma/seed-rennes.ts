@@ -317,20 +317,7 @@ export async function seedRennesDemo(prisma: PrismaClient): Promise<void> {
       select: { id: true },
     });
     if (existing) {
-      await prisma.establishment.update({
-        where: { id: existing.id },
-        data: {
-          coverImageUrl: restaurant.coverImageUrl,
-          phoneE164: restaurant.phoneE164,
-        },
-      });
-      await prisma.product.updateMany({
-        where: { establishmentId: existing.id },
-        data: {
-          description: restaurant.product.description,
-          imageUrl: restaurant.product.imageUrl,
-        },
-      });
+      // Never overwrite merchant edits or imported images on a later seed run.
       continue;
     }
 
