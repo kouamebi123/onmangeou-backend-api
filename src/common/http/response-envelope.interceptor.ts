@@ -1,4 +1,10 @@
-import { type CallHandler, type ExecutionContext, Injectable, type NestInterceptor } from '@nestjs/common';
+import {
+  type CallHandler,
+  type ExecutionContext,
+  Injectable,
+  type NestInterceptor,
+  StreamableFile,
+} from '@nestjs/common';
 import { map, type Observable } from 'rxjs';
 import type { AppRequest } from './request-context';
 
@@ -33,11 +39,19 @@ function isPaginatedPayload(value: unknown): value is PaginatedPayload<unknown> 
 
 @Injectable()
 export class ResponseEnvelopeInterceptor implements NestInterceptor {
-  intercept(context: ExecutionContext, next: CallHandler): Observable<ResponseEnvelope<unknown>> {
+  intercept(
+    context: ExecutionContext,
+    next: CallHandler,
+  ): Observable<ResponseEnvelope<unknown> | StreamableFile> {
     const request = context.switchToHttp().getRequest<AppRequest>();
 
     return next.handle().pipe(
       map((payload: unknown) => {
+        // Binary responses must reach the HTTP adapter without a JSON envelope.
+        if (payload instanceof StreamableFile) {
+          return payload;
+        }
+
         if (isPaginatedPayload(payload)) {
           return {
             data: payload.items,
