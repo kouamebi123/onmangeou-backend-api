@@ -31,6 +31,9 @@ export class MediaController {
     @Res({ passthrough: true }) response: Response,
   ): Promise<StreamableFile> {
     const file = await this.media.read(key);
+    // Public images are embedded by web clients hosted on other origins.
+    // Override Helmet only here; keep its default policy on all other routes.
+    response.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
     response.type(file.contentType);
     return new StreamableFile(file.bytes);
   }
