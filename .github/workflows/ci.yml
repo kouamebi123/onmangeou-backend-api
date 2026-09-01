@@ -52,6 +52,7 @@ jobs:
       - run: pnpm test
       - run: pnpm test:integration
         env:
-          # Les tests d'intégration lisent `.env.test` pour les secrets locaux.
+          # Les tests d'intÃ©gration lisent `.env.test` pour les secrets locaux.
           APP_ENV: test
       - run: pnpm build
+      - run: node scripts/bundle-api.cjs

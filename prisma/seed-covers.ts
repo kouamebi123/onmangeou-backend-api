@@ -11,7 +11,7 @@ const COVERS_BY_SLUG: Record<string, string> = {
     'https://images.unsplash.com/photo-1556679343-c7306c1976bc?auto=format&fit=crop&w=1400&q=70',
 };
 
-const FORCE_COVER_SLUGS = new Set(['maquis-gaston-tardif-rennes', 'cafe-bissap-jeanne-darc-rennes']);
+const FORCE_COVER_SLUGS = new Set<string>();
 
 const COVER_POOL: readonly [string, ...string[]] = [
   'https://images.unsplash.com/photo-1598103442097-8b74394b95c2?auto=format&fit=crop&w=1400&q=70',

@@ -215,8 +215,16 @@ export class EnvironmentSchema {
   @IsString()
   MAP_API_KEY?: string;
 
-  @IsString()
+  @IsEnum({ console: 'console', twilio: 'twilio' })
   SMS_PROVIDER = 'console';
+
+  @IsOptional()
+  @IsString()
+  TWILIO_ACCOUNT_SID?: string;
+
+  @IsOptional()
+  @IsString()
+  TWILIO_AUTH_TOKEN?: string;
 
   @IsString()
   SMS_SENDER_ID = 'OnMangeOu';

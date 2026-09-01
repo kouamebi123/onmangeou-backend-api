@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto';
+import { randomUUID, timingSafeEqual } from 'node:crypto';
 import { Injectable } from '@nestjs/common';
 import { Prisma } from '../../infrastructure/prisma/generated/client';
 import { PrismaService } from '../../infrastructure/prisma/prisma.service';
@@ -27,7 +27,7 @@ import type {
   SupportTicketDto,
 } from './commerce.dto';
 
-const SANDBOX_SECRET = process.env.PAYMENTS_SANDBOX_SECRET ?? 'onmangeou-local-sandbox';
+const SANDBOX_SECRET = process.env.PAYMENTS_SANDBOX_SECRET;
 
 function sqlAmount(value: unknown, label: string): bigint {
   if (value === null || value === undefined) {
@@ -219,7 +219,11 @@ export class CommerceService {
   }
 
   async sandboxWebhook(intentId: string, secret: string) {
-    if (secret !== SANDBOX_SECRET) {
+    if (
+      !SANDBOX_SECRET ||
+      Buffer.byteLength(secret) !== Buffer.byteLength(SANDBOX_SECRET) ||
+      !timingSafeEqual(Buffer.from(secret), Buffer.from(SANDBOX_SECRET))
+    ) {
       throw new DomainError('FORBIDDEN', 'Signature sandbox invalide');
     }
     return this.succeedIntent(intentId);

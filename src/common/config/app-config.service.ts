@@ -108,6 +108,14 @@ export class AppConfigService {
     return this.get('SMS_SENDER_ID');
   }
 
+  get twilio() {
+    return {
+      accountSid: this.get('TWILIO_ACCOUNT_SID') ?? '',
+      authToken: this.get('TWILIO_AUTH_TOKEN') ?? '',
+      from: this.smsSenderId,
+    };
+  }
+
   get rateLimitEnabled(): boolean {
     return this.get('RATE_LIMIT_ENABLED');
   }

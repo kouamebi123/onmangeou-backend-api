@@ -6,6 +6,7 @@ import { TokenService } from '../../common/auth/token.service';
 import { APP_LOGGER } from '../../common/logging/app-logger';
 import type { AppLogger } from '../../common/logging/app-logger';
 import { ConsoleSmsSender, SMS_SENDER } from '../../infrastructure/notifications/sms.port';
+import { TwilioSmsSender } from '../../infrastructure/notifications/twilio-sms.sender';
 import { AuthController, MeController } from './auth.controller';
 import { IdentityService } from './identity.service';
 import { OtpService } from './otp.service';
@@ -25,7 +26,10 @@ import { SessionService } from './session.service';
       // l'adaptateur est choisi par configuration, jamais code en dur.
       provide: SMS_SENDER,
       inject: [APP_LOGGER, AppConfigService],
-      useFactory: (logger: AppLogger, config: AppConfigService) => new ConsoleSmsSender(logger, config),
+      useFactory: (logger: AppLogger, config: AppConfigService) =>
+        config.smsProvider === 'twilio'
+          ? new TwilioSmsSender(config.twilio)
+          : new ConsoleSmsSender(logger, config),
     },
   ],
   exports: [IdentityService, SessionService, TokenService, ActorResolverService],
