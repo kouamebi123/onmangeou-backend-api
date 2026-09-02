@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { Clock } from '../../src/common/time/clock';
+import { decodeCursor, encodeCursor } from '../../src/common/pagination/cursor';
 import { CommerceService } from '../../src/domains/commerce/commerce.service';
 import { canAdvanceDelivery } from '../../src/domains/commerce/delivery-rules';
 import {
@@ -38,6 +39,8 @@ function fixture() {
   return {
     tx,
     prisma,
+    tenant,
+    entitlements,
     service: new CommerceService(
       prisma as unknown as PrismaService,
       tenant as unknown as TenantScopeService,
@@ -46,6 +49,40 @@ function fixture() {
     ),
   };
 }
+
+describe('Reservation history', () => {
+  it('returns 20 terminal bookings with a stable next cursor and establishment scope', async () => {
+    const f = fixture();
+    const rows = Array.from({ length: 21 }, (_, index) => ({
+      id: `00000000-0000-4000-8000-${String(index).padStart(12, '0')}`,
+      starts_at: new Date('2026-09-01T12:00:00Z'),
+    }));
+    f.prisma.$queryRaw.mockResolvedValue(rows);
+    const page = await f.service.listReservationHistory(actor, 'est');
+    expect(page.items).toHaveLength(20);
+    expect(decodeCursor(page.nextCursor ?? '')).toEqual({
+      id: rows[19]?.id,
+      sortValue: '2026-09-01T12:00:00.000Z',
+    });
+    expect(f.tenant.assertEstablishmentInScope).toHaveBeenCalledWith(actor, 'est');
+    const sql = (f.prisma.$queryRaw.mock.calls[0]?.[0] as TemplateStringsArray).join('');
+    expect(sql).toContain("'COMPLETED', 'CANCELLED', 'REJECTED', 'NO_SHOW'");
+    expect(sql).toContain('ORDER BY r.starts_at DESC, r.id DESC LIMIT 21');
+  });
+  it('rejects invalid date or UUID cursors before querying', async () => {
+    const f = fixture();
+    await expect(
+      f.service.listReservationHistory(actor, 'est', encodeCursor({ sortValue: 'invalid', id: 'invalid' })),
+    ).rejects.toThrow();
+    expect(f.prisma.$queryRaw).not.toHaveBeenCalled();
+  });
+  it('does not query bookings outside the permitted establishment', async () => {
+    const f = fixture();
+    f.tenant.assertEstablishmentInScope.mockRejectedValue(new Error('Forbidden'));
+    await expect(f.service.listReservationHistory(actor, 'other')).rejects.toThrow('Forbidden');
+    expect(f.prisma.$queryRaw).not.toHaveBeenCalled();
+  });
+});
 
 describe('Delivery contract', () => {
   it('only permits ordered steps on an accepted or ready delivery order', () => {
@@ -106,7 +143,9 @@ describe('Table allocation', () => {
       .mockResolvedValueOnce([{ id: 'table' }]);
     await f.service.changeReservationStatus(actor, 'reservation', 'CONFIRMED');
     expect(f.tx.$queryRaw.mock.calls[0]?.[0].join('')).toContain('FOR UPDATE');
-    expect(f.tx.$queryRaw.mock.calls[2]?.[0].join('')).toContain('NOT EXISTS');
+    const allocation = f.tx.$queryRaw.mock.calls[2]?.[0] as unknown as { text: string };
+    expect(allocation.text).toContain('NOT EXISTS');
+    expect(allocation.text.match(/::timestamptz/g)).toHaveLength(3);
     expect(f.tx.$executeRaw.mock.calls[0]).toContain('table');
   });
 });

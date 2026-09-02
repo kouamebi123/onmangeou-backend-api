@@ -1,4 +1,6 @@
 import { randomUUID, timingSafeEqual } from 'node:crypto';
+import { isISO8601, isUUID } from 'class-validator';
+import { buildPage, decodeCursor } from '../../common/pagination/cursor';
 import { Injectable } from '@nestjs/common';
 import { Clock } from '../../common/time/clock';
 import { Prisma } from '../../infrastructure/prisma/generated/client';
@@ -11,6 +13,7 @@ import { EntitlementsService } from '../entitlements/entitlements.service';
 import { MODULE_CODES, type ModuleCode } from '../entitlements/module-codes';
 import { notifyUser } from './notify';
 import { canChangeReservationStatus } from './reservation-rules';
+import { availableTableQuery } from './reservation-allocation';
 import { canAdvanceDelivery } from './delivery-rules';
 import { priceCoupon } from './coupon-pricing';
 import { aggregateOrderItems } from '../orders/order-items';
@@ -359,7 +362,7 @@ export class CommerceService {
       establishment.id,
     );
     const startsAt = new Date(dto.startsAt);
-    if (Number.isNaN(startsAt.getTime()) || startsAt.getTime() <= Date.now()) {
+    if (Number.isNaN(startsAt.getTime()) || startsAt.getTime() <= this.clock.nowMs()) {
       throw validationFailed([
         { field: 'startsAt', code: 'invalid', message: 'La date de réservation est passée' },
       ]);
@@ -442,6 +445,51 @@ export class CommerceService {
     `;
   }
 
+  async listReservationHistory(actor: AuthenticatedActor, establishmentId: string, cursor?: string) {
+    await this.requireModules(actor, [MODULE_CODES.RESERVATIONS_TABLES], establishmentId);
+    const organizationId = this.tenant.requireOrganization(actor);
+    await this.tenant.assertEstablishmentInScope(actor, establishmentId);
+    const position = cursor ? decodeCursor(cursor) : null;
+    if (
+      position &&
+      (!isUUID(position.id) ||
+        !isISO8601(position.sortValue) ||
+        !Number.isFinite(Date.parse(position.sortValue)))
+    ) {
+      throw validationFailed([
+        { field: 'cursor', code: 'INVALID', message: 'Curseur de pagination invalide.' },
+      ]);
+    }
+    const after = position
+      ? Prisma.sql`AND (r.starts_at, r.id) < (${position.sortValue}::timestamptz, ${position.id}::uuid)`
+      : Prisma.sql``;
+    const rows = await this.prisma.$queryRaw<
+      Array<{
+        id: string;
+        public_ref: string;
+        status: string;
+        party_size: number;
+        starts_at: Date;
+        customer_name: string;
+        customer_phone: string;
+        notes: string | null;
+        table_name: string | null;
+        establishment_name: string;
+        timezone: string;
+      }>
+    >`
+      SELECT r.id, r.public_ref, r.status, r.party_size, r.starts_at, r.customer_name, r.customer_phone, r.notes,
+        (SELECT name FROM dining_tables WHERE id = r.table_id) AS table_name,
+        e.name AS establishment_name, e.timezone
+      FROM reservations r JOIN establishments e ON e.id = r.establishment_id
+      WHERE r.organization_id = ${organizationId}::uuid AND r.establishment_id = ${establishmentId}::uuid
+        AND r.status IN ('COMPLETED', 'CANCELLED', 'REJECTED', 'NO_SHOW')
+        ${after}
+      ORDER BY r.starts_at DESC, r.id DESC LIMIT 21
+    `;
+    return buildPage(rows, 20, (row) => ({ sortValue: row.starts_at.toISOString(), id: row.id }));
+  }
+
   async changeReservationStatus(actor: AuthenticatedActor, reservationId: string, status: string) {
     const organizationId = this.tenant.requireOrganization(actor);
     const scope = await this.prisma.$queryRaw<Array<{ establishment_id: string }>>`
@@ -470,7 +518,7 @@ export class CommerceService {
         });
       }
       let tableId = current.table_id;
-      if (status === 'NO_SHOW' && current.starts_at.getTime() > Date.now()) {
+      if (status === 'NO_SHOW' && current.starts_at.getTime() > this.clock.nowMs()) {
         throw validationFailed([
           {
             field: 'status',
@@ -480,27 +528,14 @@ export class CommerceService {
         ]);
       }
       if (status === 'CONFIRMED' || status === 'SEATED') {
-        if (status === 'CONFIRMED' && current.starts_at.getTime() <= Date.now()) {
+        if (status === 'CONFIRMED' && current.starts_at.getTime() <= this.clock.nowMs()) {
           throw validationFailed([
             { field: 'startsAt', code: 'past', message: 'Cette réservation est passée.' },
           ]);
         }
-        const available = await tx.$queryRaw<Array<{ id: string }>>`
-          SELECT t.id FROM dining_tables t
-          WHERE t.establishment_id = ${establishmentId}::uuid AND t.seats >= ${current.party_size}
-            AND NOT EXISTS (
-              SELECT 1 FROM reservations r
-              WHERE r.establishment_id = ${establishmentId}::uuid AND r.id <> ${reservationId}::uuid
-                AND (r.table_id = t.id OR r.table_id IS NULL)
-                AND (
-                  (r.status = 'SEATED' AND (${status} = 'SEATED' OR r.starts_at + INTERVAL '2 hours' > ${current.starts_at}))
-                  OR (r.status = 'CONFIRMED' AND r.starts_at < ${current.starts_at} + INTERVAL '2 hours'
-                    AND r.starts_at + INTERVAL '2 hours' > ${current.starts_at})
-                )
-            )
-          ORDER BY (t.id = ${tableId}::uuid) DESC NULLS LAST, t.seats ASC, t.name ASC
-          LIMIT 1
-        `;
+        const available = await tx.$queryRaw<Array<{ id: string }>>(
+          availableTableQuery(establishmentId, reservationId, current, status),
+        );
         if (!available[0])
           throw new DomainError('CONFLICT', 'Aucune table disponible', {
             publicDetail:

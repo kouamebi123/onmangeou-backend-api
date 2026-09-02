@@ -4,6 +4,7 @@ import { CurrentActor, RequirePermissions } from '../../common/auth/auth.decorat
 import type { AuthenticatedActor } from '../../common/auth/authenticated-actor';
 import { PERMISSIONS, PLATFORM_PERMISSIONS } from '../../common/auth/permissions';
 import { CommerceService } from './commerce.service';
+import { ReservationHistoryDto } from './reservation-history.dto';
 import { CouponWriteDto, CouponStatusDto, CouponListDto } from './coupon.dto';
 import { Idempotent } from '../../common/idempotency/idempotent.decorator';
 import {
@@ -40,6 +41,13 @@ export class MerchantOpsController {
     @Query('establishmentId') establishmentId?: string,
   ) {
     return this.commerce.listMerchantReservations(actor, establishmentId);
+  }
+
+  @Get('merchant/reservations/history')
+  @RequirePermissions(PERMISSIONS.ORDERS_READ)
+  @ApiOperation({ summary: 'Historique des réservations, 20 résultats par page' })
+  reservationHistory(@CurrentActor() actor: AuthenticatedActor, @Query() query: ReservationHistoryDto) {
+    return this.commerce.listReservationHistory(actor, query.establishmentId, query.cursor);
   }
 
   @Post('merchant/reservations/:id/status')
