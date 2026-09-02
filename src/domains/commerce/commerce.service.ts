@@ -562,7 +562,7 @@ export class CommerceService {
     }
     return this.prisma.$queryRaw`
       SELECT id, title, body, starts_at, ends_at FROM restaurant_events
-      WHERE establishment_id = ${establishmentId}::uuid AND starts_at >= NOW() - INTERVAL '1 day'
+      WHERE establishment_id = ${establishmentId}::uuid AND cancelled_at IS NULL AND COALESCE(ends_at, starts_at + INTERVAL '2 hours') > NOW()
       ORDER BY starts_at ASC
       LIMIT 20
     `;
