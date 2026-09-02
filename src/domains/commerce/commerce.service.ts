@@ -244,7 +244,8 @@ export class CommerceService {
       const intents = await tx.$queryRaw<Array<{ status: string }>>`
         SELECT status FROM payment_intents WHERE id = ${intentId}::uuid FOR UPDATE
       `;
-      const intent = intents[0], order = orders[0];
+      const intent = intents[0],
+        order = orders[0];
       if (!intent || !order) throw notFound('Paiement', intentId);
       if (intent.status === 'SUCCEEDED') return { id: intentId, status: 'SUCCEEDED', replayed: true };
       if (intent.status !== 'REQUIRES_ACTION' || order.status !== 'PENDING_PAYMENT') {
@@ -374,9 +375,10 @@ export class CommerceService {
       WHERE id = ${reservationId}::uuid AND user_id = ${actor.userId}::uuid
         AND status IN ('REQUESTED', 'CONFIRMED')
     `;
-    if (!changed) throw new DomainError('CONFLICT', 'Reservation modifiee', {
-      publicDetail: 'Cette réservation a changé. Actualisez la liste.',
-    });
+    if (!changed)
+      throw new DomainError('CONFLICT', 'Reservation modifiee', {
+        publicDetail: 'Cette réservation a changé. Actualisez la liste.',
+      });
     return this.getReservation(reservationId);
   }
 
@@ -415,7 +417,9 @@ export class CommerceService {
     await this.prisma.$transaction(async (tx) => {
       // Serializes allocation for the establishment, including different reservations.
       await tx.$queryRaw`SELECT id FROM establishments WHERE id = ${establishmentId}::uuid FOR UPDATE`;
-      const rows = await tx.$queryRaw<Array<{ status: string; starts_at: Date; party_size: number; table_id: string | null }>>`
+      const rows = await tx.$queryRaw<
+        Array<{ status: string; starts_at: Date; party_size: number; table_id: string | null }>
+      >`
         SELECT status, starts_at, party_size, table_id FROM reservations
         WHERE id = ${reservationId}::uuid FOR UPDATE
       `;
@@ -429,11 +433,19 @@ export class CommerceService {
       }
       let tableId = current.table_id;
       if (status === 'NO_SHOW' && current.starts_at.getTime() > Date.now()) {
-        throw validationFailed([{ field: 'status', code: 'early', message: 'Le client ne peut pas être déclaré absent avant l’heure prévue.' }]);
+        throw validationFailed([
+          {
+            field: 'status',
+            code: 'early',
+            message: 'Le client ne peut pas être déclaré absent avant l’heure prévue.',
+          },
+        ]);
       }
       if (status === 'CONFIRMED' || status === 'SEATED') {
         if (status === 'CONFIRMED' && current.starts_at.getTime() <= Date.now()) {
-          throw validationFailed([{ field: 'startsAt', code: 'past', message: 'Cette réservation est passée.' }]);
+          throw validationFailed([
+            { field: 'startsAt', code: 'past', message: 'Cette réservation est passée.' },
+          ]);
         }
         const available = await tx.$queryRaw<Array<{ id: string }>>`
           SELECT t.id FROM dining_tables t
@@ -451,9 +463,11 @@ export class CommerceService {
           ORDER BY (t.id = ${tableId}::uuid) DESC NULLS LAST, t.seats ASC, t.name ASC
           LIMIT 1
         `;
-        if (!available[0]) throw new DomainError('CONFLICT', 'Aucune table disponible', {
-          publicDetail: 'Aucune table adaptée n’est disponible pour ces deux heures. Vérifiez vos tables et les réservations existantes.',
-        });
+        if (!available[0])
+          throw new DomainError('CONFLICT', 'Aucune table disponible', {
+            publicDetail:
+              'Aucune table adaptée n’est disponible pour ces deux heures. Vérifiez vos tables et les réservations existantes.',
+          });
         tableId = available[0].id;
       }
       await tx.$executeRaw`
@@ -516,7 +530,9 @@ export class CommerceService {
 
   async respondReview(actor: AuthenticatedActor, reviewId: string, dto: ReviewResponseDto) {
     if (dto.body.trim().length < 2) {
-      throw validationFailed([{ field: 'body', code: 'short', message: 'Votre réponse doit contenir au moins deux caractères.' }]);
+      throw validationFailed([
+        { field: 'body', code: 'short', message: 'Votre réponse doit contenir au moins deux caractères.' },
+      ]);
     }
     const organizationId = this.tenant.requireOrganization(actor);
     const rows = await this.prisma.$queryRaw<Array<{ establishment_id: string }>>`
@@ -838,7 +854,17 @@ export class CommerceService {
     const scope = establishmentId
       ? Prisma.sql`AND o.establishment_id = ${establishmentId}::uuid`
       : Prisma.sql``;
-    const rows = await this.prisma.$queryRaw<Array<{ id: string; status: string; order_status: string; service: string; public_ref: string; customer_name: string; address_text: string | null }>>`
+    const rows = await this.prisma.$queryRaw<
+      Array<{
+        id: string;
+        status: string;
+        order_status: string;
+        service: string;
+        public_ref: string;
+        customer_name: string;
+        address_text: string | null;
+      }>
+    >`
       SELECT t.id, t.order_id, t.status, t.courier_name, t.address_text, o.public_ref, o.customer_name, o.status AS order_status, o.service
       FROM delivery_tasks t
       JOIN orders o ON o.id = t.order_id
@@ -847,7 +873,12 @@ export class CommerceService {
       ORDER BY t.created_at DESC
       LIMIT 50
     `;
-    return rows.map((row) => ({ ...row, allowedActions: ['ASSIGNED', 'PICKED_UP', 'DELIVERING', 'DELIVERED'].filter((next) => canAdvanceDelivery(row.status, next, row.order_status, row.service)) }));
+    return rows.map((row) => ({
+      ...row,
+      allowedActions: ['ASSIGNED', 'PICKED_UP', 'DELIVERING', 'DELIVERED'].filter((next) =>
+        canAdvanceDelivery(row.status, next, row.order_status, row.service),
+      ),
+    }));
   }
 
   async changeDelivery(actor: AuthenticatedActor, taskId: string, dto: DeliveryStatusDto) {
@@ -869,7 +900,8 @@ export class CommerceService {
       const tasks = await tx.$queryRaw<Array<{ status: string }>>`
         SELECT status FROM delivery_tasks WHERE id = ${taskId}::uuid FOR UPDATE
       `;
-      const order = orders[0], task = tasks[0];
+      const order = orders[0],
+        task = tasks[0];
       if (!order || !task) throw notFound('Livraison', taskId);
       if (task.status === dto.status) return { id: taskId, status: task.status };
       if (!canAdvanceDelivery(task.status, dto.status, order.status, order.service)) {
@@ -968,10 +1000,17 @@ export class CommerceService {
         UPDATE payment_intents SET status = 'REFUNDED', updated_at = NOW()
         WHERE id = ${intent.id}::uuid AND status = 'SUCCEEDED'
       `;
-      if (changed) await tx.auditLog.create({ data: {
-        actorUserId: actor.userId, action: 'admin.payment.refund', resourceType: 'order', resourceId: orderId,
-        beforeState: { status: 'SUCCEEDED' }, afterState: { status: 'REFUNDED', sandbox: true },
-      } });
+      if (changed)
+        await tx.auditLog.create({
+          data: {
+            actorUserId: actor.userId,
+            action: 'admin.payment.refund',
+            resourceType: 'order',
+            resourceId: orderId,
+            beforeState: { status: 'SUCCEEDED' },
+            afterState: { status: 'REFUNDED', sandbox: true },
+          },
+        });
     });
     return { id: orderId, paymentStatus: 'REFUNDED' };
   }
@@ -994,11 +1033,18 @@ export class CommerceService {
       throw notFound('Avis', reviewId);
     }
     await this.prisma.$transaction(async (tx) => {
-      const changed = await tx.$executeRaw`UPDATE reviews SET status = 'HIDDEN' WHERE id = ${reviewId}::uuid AND status <> 'HIDDEN'`;
-      if (changed) await tx.auditLog.create({ data: {
-        actorUserId: actor.userId, action: 'admin.review.moderate', resourceType: 'review', resourceId: reviewId,
-        afterState: { status: 'HIDDEN' },
-      } });
+      const changed =
+        await tx.$executeRaw`UPDATE reviews SET status = 'HIDDEN' WHERE id = ${reviewId}::uuid AND status <> 'HIDDEN'`;
+      if (changed)
+        await tx.auditLog.create({
+          data: {
+            actorUserId: actor.userId,
+            action: 'admin.review.moderate',
+            resourceType: 'review',
+            resourceId: reviewId,
+            afterState: { status: 'HIDDEN' },
+          },
+        });
     });
     return { id: reviewId, status: 'HIDDEN' };
   }
@@ -1015,14 +1061,22 @@ export class CommerceService {
 
   async closeTicket(actor: AuthenticatedActor, ticketId: string) {
     await this.prisma.$transaction(async (tx) => {
-      const rows = await tx.$queryRaw<Array<{ status: string }>>`SELECT status FROM support_tickets WHERE id = ${ticketId}::uuid FOR UPDATE`;
+      const rows = await tx.$queryRaw<
+        Array<{ status: string }>
+      >`SELECT status FROM support_tickets WHERE id = ${ticketId}::uuid FOR UPDATE`;
       if (!rows[0]) throw notFound('Ticket', ticketId);
       if (rows[0].status === 'CLOSED') return;
       await tx.$executeRaw`UPDATE support_tickets SET status = 'CLOSED' WHERE id = ${ticketId}::uuid`;
-      await tx.auditLog.create({ data: {
-        actorUserId: actor.userId, action: 'admin.support.write', resourceType: 'support_ticket', resourceId: ticketId,
-        beforeState: { status: rows[0].status }, afterState: { status: 'CLOSED' },
-      } });
+      await tx.auditLog.create({
+        data: {
+          actorUserId: actor.userId,
+          action: 'admin.support.write',
+          resourceType: 'support_ticket',
+          resourceId: ticketId,
+          beforeState: { status: rows[0].status },
+          afterState: { status: 'CLOSED' },
+        },
+      });
     });
     return { id: ticketId, status: 'CLOSED' };
   }
@@ -1062,7 +1116,13 @@ export class CommerceService {
     await this.requireModules(actor, [MODULE_CODES.RESERVATIONS_TABLES], establishmentId);
     await this.tenant.assertEstablishmentInScope(actor, establishmentId);
     if (!name?.trim() || name.trim().length > 80 || !Number.isInteger(seats) || seats < 1 || seats > 100) {
-      throw validationFailed([{ field: 'seats', code: 'invalid', message: 'Indiquez un nom et un nombre de places entre 1 et 100.' }]);
+      throw validationFailed([
+        {
+          field: 'seats',
+          code: 'invalid',
+          message: 'Indiquez un nom et un nombre de places entre 1 et 100.',
+        },
+      ]);
     }
     const id = randomUUID();
     await this.prisma.$executeRaw`

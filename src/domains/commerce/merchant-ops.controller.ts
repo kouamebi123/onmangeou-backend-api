@@ -199,10 +199,7 @@ export class MerchantOpsController {
 
   @Post('merchant/tables')
   @RequirePermissions(PERMISSIONS.ESTABLISHMENT_WRITE)
-  async createTable(
-    @CurrentActor() actor: AuthenticatedActor,
-    @Body() body: CreateTableDto,
-  ) {
+  async createTable(@CurrentActor() actor: AuthenticatedActor, @Body() body: CreateTableDto) {
     return this.commerce.createTable(actor, body.establishmentId, body.name, body.seats);
   }
 

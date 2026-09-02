@@ -319,7 +319,10 @@ export class OrdersService {
     await this.tenant.assertEstablishmentInScope(actor, current.establishmentId);
 
     const allowedFrom = MERCHANT_TRANSITIONS[status];
-    if (!allowedFrom?.includes(current.status) || (status === 'COMPLETED' && current.service === 'DELIVERY')) {
+    if (
+      !allowedFrom?.includes(current.status) ||
+      (status === 'COMPLETED' && current.service === 'DELIVERY')
+    ) {
       throw new DomainError('CONFLICT', `Transition ${current.status} → ${status} interdite`, {
         publicDetail: 'Cette étape n’est pas possible maintenant.',
       });
@@ -334,7 +337,10 @@ export class OrdersService {
     return `OMO-${raw}`;
   }
 
-  private async findOwned(orderId: string, customerUserId: string): Promise<{ status: OrderStatus; service: OrderService }> {
+  private async findOwned(
+    orderId: string,
+    customerUserId: string,
+  ): Promise<{ status: OrderStatus; service: OrderService }> {
     const rows = await this.prisma.$queryRaw<Array<{ status: OrderStatus; service: OrderService }>>`
       SELECT status, service FROM orders
       WHERE id = ${orderId}::uuid AND customer_user_id = ${customerUserId}::uuid
@@ -350,7 +356,9 @@ export class OrdersService {
     orderId: string,
     organizationId: string,
   ): Promise<{ status: OrderStatus; establishmentId: string; service: OrderService }> {
-    const rows = await this.prisma.$queryRaw<Array<{ status: OrderStatus; establishment_id: string; service: OrderService }>>`
+    const rows = await this.prisma.$queryRaw<
+      Array<{ status: OrderStatus; establishment_id: string; service: OrderService }>
+    >`
       SELECT status, establishment_id, service FROM orders
       WHERE id = ${orderId}::uuid AND organization_id = ${organizationId}::uuid
       LIMIT 1
@@ -367,9 +375,10 @@ export class OrdersService {
         UPDATE orders SET status = ${status}::"OrderStatus", updated_at = NOW()
         WHERE id = ${orderId}::uuid AND status = ${previous}::"OrderStatus"
       `;
-      if (!changed) throw new DomainError('CONFLICT', 'Commande modifiee', {
-        publicDetail: 'La commande a changé. Actualisez son suivi.',
-      });
+      if (!changed)
+        throw new DomainError('CONFLICT', 'Commande modifiee', {
+          publicDetail: 'La commande a changé. Actualisez son suivi.',
+        });
       if (status === 'CANCELLED' || status === 'REJECTED') {
         await tx.$executeRaw`
           UPDATE delivery_tasks SET status = 'CANCELLED', updated_at = NOW()
