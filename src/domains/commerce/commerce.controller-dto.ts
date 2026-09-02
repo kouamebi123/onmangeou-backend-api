@@ -1,6 +1,14 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
-import { ArrayMinSize, IsArray, IsUUID, ValidateNested } from 'class-validator';
+import {
+  ArrayMinSize,
+  IsArray,
+  IsUUID,
+  IsOptional,
+  IsString,
+  MaxLength,
+  ValidateNested,
+} from 'class-validator';
 import { CreateOrderItemDto } from '../orders/dto/orders.dto';
 
 export {
@@ -12,6 +20,11 @@ export {
 } from './commerce.dto';
 
 export class QuoteBody {
+  @IsOptional()
+  @IsString()
+  @MaxLength(40)
+  couponCode?: string;
+
   @ApiProperty()
   @IsUUID()
   establishmentId!: string;

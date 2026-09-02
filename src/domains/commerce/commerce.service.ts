@@ -1,5 +1,6 @@
 import { randomUUID, timingSafeEqual } from 'node:crypto';
 import { Injectable } from '@nestjs/common';
+import { Clock } from '../../common/time/clock';
 import { Prisma } from '../../infrastructure/prisma/generated/client';
 import { PrismaService } from '../../infrastructure/prisma/prisma.service';
 import type { AuthenticatedActor } from '../../common/auth/authenticated-actor';
@@ -11,6 +12,10 @@ import { MODULE_CODES, type ModuleCode } from '../entitlements/module-codes';
 import { notifyUser } from './notify';
 import { canChangeReservationStatus } from './reservation-rules';
 import { canAdvanceDelivery } from './delivery-rules';
+import { priceCoupon } from './coupon-pricing';
+import { aggregateOrderItems } from '../orders/order-items';
+import { couponError, normalizeCouponCode } from './coupon-rules';
+import type { CouponWriteDto } from './coupon.dto';
 import type {
   CashMovementDto,
   CreateCreditDto,
@@ -49,6 +54,7 @@ export class CommerceService {
     private readonly prisma: PrismaService,
     private readonly tenant: TenantScopeService,
     private readonly entitlements: EntitlementsService,
+    private readonly clock: Clock,
   ) {}
 
   private async isEstablishmentModuleEnabled(establishmentId: string, code: ModuleCode): Promise<boolean> {
@@ -76,36 +82,68 @@ export class CommerceService {
     await this.entitlements.assertModuleEnabled(organizationId, codes[0], establishmentId);
   }
 
-  async quote(establishmentId: string, items: Array<{ productId: string; quantity: number }>) {
+  async quote(
+    establishmentId: string,
+    items: Array<{ productId: string; quantity: number }>,
+    couponCode?: string,
+  ) {
+    const establishment = await this.prisma.establishment.findFirst({
+      where: { id: establishmentId, deletedAt: null, status: 'PUBLISHED' },
+      select: { organizationId: true },
+    });
+    if (!establishment) throw notFound('Établissement', establishmentId);
+    if (couponCode)
+      await this.entitlements.assertModuleEnabled(
+        establishment.organizationId,
+        MODULE_CODES.MARKETING_PROMOTIONS,
+        establishmentId,
+      );
+    const quantities = aggregateOrderItems(items);
     const products = await this.prisma.product.findMany({
       where: {
-        id: { in: items.map((item) => item.productId) },
+        id: { in: [...quantities.keys()] },
         establishmentId,
         deletedAt: null,
         status: 'PUBLISHED',
       },
+      include: { availability: { take: 1, orderBy: { changedAt: 'desc' } } },
     });
-    if (products.length !== items.length) {
+    if (products.length !== quantities.size) {
       throw validationFailed([
         { field: 'items', code: 'invalid', message: 'Un plat est invalide pour ce devis' },
       ]);
     }
-    const lines = items.map((item) => {
-      const product = products.find((entry) => entry.id === item.productId);
+    const lines = [...quantities].map(([productId, quantity]) => {
+      const product = products.find((entry) => entry.id === productId);
       if (!product) {
         throw validationFailed([{ field: 'items', code: 'invalid', message: 'Plat introuvable' }]);
       }
-      const lineAmount = product.basePriceAmount * BigInt(item.quantity);
+      if (product.availability[0] && product.availability[0].status !== 'AVAILABLE') {
+        throw validationFailed([
+          { field: 'items', code: 'unavailable', message: `${product.name} n’est plus disponible` },
+        ]);
+      }
+      const lineAmount = product.basePriceAmount * BigInt(quantity);
       return {
         productId: product.id,
         name: product.name,
-        quantity: item.quantity,
+        quantity,
         unitPrice: toMoneyView(product.basePriceAmount),
         linePrice: toMoneyView(lineAmount),
       };
     });
-    const total = lines.reduce((sum, line) => sum + BigInt(line.linePrice.amount), 0n);
-    return { lines, total: toMoneyView(total), currency: 'XOF' };
+    const subtotal = lines.reduce((sum, line) => sum + BigInt(line.linePrice.amount), 0n);
+    const price = await priceCoupon(this.prisma, establishmentId, subtotal, couponCode, () =>
+      this.clock.now(),
+    );
+    return {
+      lines,
+      subtotal: toMoneyView(subtotal),
+      discount: toMoneyView(price.discount),
+      couponCode: price.couponCode,
+      total: toMoneyView(price.total),
+      currency: 'XOF',
+    };
   }
 
   async putCart(
@@ -1132,24 +1170,69 @@ export class CommerceService {
     return { id, name: name.trim(), seats };
   }
 
-  async listCoupons(actor: AuthenticatedActor, establishmentId: string) {
+  async listCoupons(actor: AuthenticatedActor, establishmentId: string, offset = 0) {
     await this.requireModules(actor, [MODULE_CODES.MARKETING_PROMOTIONS], establishmentId);
     await this.tenant.assertEstablishmentInScope(actor, establishmentId);
     return this.prisma.$queryRaw`
-      SELECT id, code, discount_bps, active FROM coupons
-      WHERE establishment_id = ${establishmentId}::uuid ORDER BY created_at DESC LIMIT 40
+      SELECT id, code, discount_bps, active, expires_at, minimum_amount::text AS minimum_amount FROM coupons
+      WHERE establishment_id = ${establishmentId}::uuid ORDER BY created_at DESC, id DESC LIMIT 50 OFFSET ${offset}
     `;
   }
 
-  async createCoupon(actor: AuthenticatedActor, establishmentId: string, code: string, discountBps: number) {
+  async createCoupon(actor: AuthenticatedActor, dto: CouponWriteDto) {
+    const { establishmentId, discountBps } = dto;
+    const code = normalizeCouponCode(dto.code);
+    const expiresAt = dto.expiresAt ? new Date(dto.expiresAt) : null;
+    if (expiresAt && expiresAt.getTime() <= this.clock.nowMs())
+      couponError('La date d’expiration doit être dans le futur.');
     await this.requireModules(actor, [MODULE_CODES.MARKETING_PROMOTIONS], establishmentId);
     await this.tenant.assertEstablishmentInScope(actor, establishmentId);
     const id = randomUUID();
-    await this.prisma.$executeRaw`
-      INSERT INTO coupons (id, establishment_id, code, discount_bps, active, created_at)
-      VALUES (${id}::uuid, ${establishmentId}::uuid, ${code.trim().toUpperCase()}, ${discountBps}, TRUE, NOW())
-    `;
-    return { id, code: code.trim().toUpperCase(), discountBps };
+    await this.prisma.$transaction(async (tx) => {
+      const inserted = await tx.$executeRaw`
+        INSERT INTO coupons (id, establishment_id, code, discount_bps, active, expires_at, minimum_amount, created_at)
+        VALUES (${id}::uuid, ${establishmentId}::uuid, ${code}, ${discountBps}, TRUE, ${expiresAt}, ${BigInt(dto.minimumAmount ?? '0')}, NOW())
+        ON CONFLICT (establishment_id, code) DO NOTHING`;
+      if (!inserted) couponError('Ce code existe déjà dans votre restaurant. Choisissez un autre code.');
+      await tx.auditLog.create({
+        data: {
+          actorUserId: actor.userId,
+          action: 'coupon.create',
+          resourceType: 'coupon',
+          resourceId: id,
+          afterState: {
+            code,
+            discountBps,
+            expiresAt: dto.expiresAt ?? null,
+            minimumAmount: dto.minimumAmount ?? '0',
+          },
+        },
+      });
+    });
+    return { id, code, discountBps };
+  }
+
+  async setCouponActive(actor: AuthenticatedActor, id: string, active: boolean) {
+    const rows = await this.prisma.$queryRaw<
+      Array<{ establishment_id: string }>
+    >`SELECT establishment_id FROM coupons WHERE id=${id}::uuid`;
+    if (!rows[0]) throw notFound('Code promo', id);
+    const establishmentId = rows[0].establishment_id;
+    await this.tenant.assertEstablishmentInScope(actor, establishmentId);
+    await this.requireModules(actor, [MODULE_CODES.MARKETING_PROMOTIONS], establishmentId);
+    await this.prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`UPDATE coupons SET active=${active} WHERE id=${id}::uuid`;
+      await tx.auditLog.create({
+        data: {
+          actorUserId: actor.userId,
+          action: 'coupon.status',
+          resourceType: 'coupon',
+          resourceId: id,
+          afterState: { active },
+        },
+      });
+    });
+    return { id, active };
   }
 
   private async getReservation(id: string) {

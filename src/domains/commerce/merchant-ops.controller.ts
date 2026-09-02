@@ -4,6 +4,8 @@ import { CurrentActor, RequirePermissions } from '../../common/auth/auth.decorat
 import type { AuthenticatedActor } from '../../common/auth/authenticated-actor';
 import { PERMISSIONS, PLATFORM_PERMISSIONS } from '../../common/auth/permissions';
 import { CommerceService } from './commerce.service';
+import { CouponWriteDto, CouponStatusDto, CouponListDto } from './coupon.dto';
+import { Idempotent } from '../../common/idempotency/idempotent.decorator';
 import {
   CashMovementDto,
   CreateCreditDto,
@@ -205,20 +207,25 @@ export class MerchantOpsController {
 
   @Get('merchant/coupons')
   @RequirePermissions(PERMISSIONS.ESTABLISHMENT_WRITE)
-  async coupons(
-    @CurrentActor() actor: AuthenticatedActor,
-    @Query('establishmentId') establishmentId: string,
-  ) {
-    return this.commerce.listCoupons(actor, establishmentId);
+  async coupons(@CurrentActor() actor: AuthenticatedActor, @Query() query: CouponListDto) {
+    return this.commerce.listCoupons(actor, query.establishmentId, query.offset);
   }
 
   @Post('merchant/coupons')
   @RequirePermissions(PERMISSIONS.ESTABLISHMENT_WRITE)
-  async createCoupon(
+  @Idempotent({ scope: 'coupon.create' })
+  async createCoupon(@CurrentActor() actor: AuthenticatedActor, @Body() body: CouponWriteDto) {
+    return this.commerce.createCoupon(actor, body);
+  }
+
+  @Post('merchant/coupons/:id/status')
+  @RequirePermissions(PERMISSIONS.ESTABLISHMENT_WRITE)
+  async couponStatus(
     @CurrentActor() actor: AuthenticatedActor,
-    @Body() body: { establishmentId: string; code: string; discountBps: number },
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() body: CouponStatusDto,
   ) {
-    return this.commerce.createCoupon(actor, body.establishmentId, body.code, body.discountBps);
+    return this.commerce.setCouponActive(actor, id, body.active);
   }
 
   @Get('admin/orders')

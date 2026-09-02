@@ -23,7 +23,7 @@ export class CommerceController {
   @PublicRoute()
   @ApiOperation({ summary: 'Devis d’une commande' })
   async quote(@Body() body: QuoteBody) {
-    return this.commerce.quote(body.establishmentId, body.items);
+    return this.commerce.quote(body.establishmentId, body.items, body.couponCode);
   }
 
   @Get('cart')

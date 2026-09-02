@@ -1308,6 +1308,8 @@ model Order {
 
   subtotalAmount BigInt @map("subtotal_amount")
   totalAmount    BigInt @map("total_amount")
+  discountAmount BigInt @default(0) @map("discount_amount")
+  couponCode     String? @map("coupon_code") @db.VarChar(40)
 
   placedAt  DateTime  @default(now()) @map("placed_at") @db.Timestamptz(3)
   createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)

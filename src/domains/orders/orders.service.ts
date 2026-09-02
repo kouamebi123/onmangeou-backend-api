@@ -1,5 +1,7 @@
 import { Clock } from '../../common/time/clock';
 import { orderSchedule } from './order-schedule';
+import { priceCoupon } from '../commerce/coupon-pricing';
+import { aggregateOrderItems } from './order-items';
 import { randomUUID } from 'node:crypto';
 import { Injectable } from '@nestjs/common';
 import { Prisma } from '../../infrastructure/prisma/generated/client';
@@ -57,6 +59,9 @@ export interface OrderView {
   notes: string | null;
   items: OrderItemView[];
   total: MoneyView;
+  subtotal: MoneyView;
+  discount: MoneyView;
+  couponCode: string | null;
   placedAt: string;
   scheduledFor: string | null;
   timezone: string;
@@ -73,6 +78,9 @@ interface OrderRow {
   customer_phone: string;
   notes: string | null;
   total_amount: unknown;
+  subtotal_amount: unknown;
+  discount_amount: unknown;
+  coupon_code: string | null;
   placed_at: Date;
   scheduled_for: Date | null;
   timezone: string;
@@ -122,10 +130,7 @@ export class OrdersService {
     dto: CreateOrderDto,
     source: 'marketplace' | 'manual' = 'marketplace',
   ): Promise<OrderView> {
-    const quantities = new Map<string, number>();
-    for (const item of dto.items) {
-      quantities.set(item.productId, (quantities.get(item.productId) ?? 0) + item.quantity);
-    }
+    const quantities = aggregateOrderItems(dto.items);
 
     const establishment = await this.prisma.establishment.findFirst({
       where: { id: dto.establishmentId, deletedAt: null, status: 'PUBLISHED' },
@@ -140,6 +145,13 @@ export class OrdersService {
       establishment.id,
     );
     const paymentMethod = dto.paymentMethod ?? 'CASH';
+    if (dto.couponCode) {
+      await this.entitlements.assertModuleEnabled(
+        establishment.organizationId,
+        MODULE_CODES.MARKETING_PROMOTIONS,
+        establishment.id,
+      );
+    }
     const service = dto.service ?? (source === 'manual' ? 'DINE_IN' : 'TAKEAWAY');
     if (service === 'DELIVERY') {
       await this.entitlements.assertModuleEnabled(
@@ -190,7 +202,7 @@ export class OrdersService {
       };
     });
 
-    const totalAmount = lines.reduce((sum, line) => sum + line.lineAmount, 0n);
+    const subtotalAmount = lines.reduce((sum, line) => sum + line.lineAmount, 0n);
     const user = await this.prisma.user.findUnique({
       where: { id: actor.userId },
       select: { fullName: true, phoneE164: true },
@@ -201,7 +213,6 @@ export class OrdersService {
     const customerName = dto.customerName?.trim() || user?.fullName?.trim() || 'Client';
     const customerPhone = dto.customerPhone?.trim() || user?.phoneE164 || '';
     const notes = dto.notes?.trim() || null;
-    const initialStatus = paymentMethod === 'CASH' ? 'PENDING_RESTAURANT' : 'PENDING_PAYMENT';
     let scheduledFor: Date | null = null;
     if (dto.scheduledFor) {
       scheduledFor = new Date(dto.scheduledFor);
@@ -231,17 +242,22 @@ export class OrdersService {
     }
 
     await this.prisma.$transaction(async (tx) => {
+      const price = await priceCoupon(tx, establishment.id, subtotalAmount, dto.couponCode, () =>
+        this.clock.now(),
+      );
+      const chargedMethod = price.total === 0n ? 'CASH' : paymentMethod;
+      const initialStatus = chargedMethod === 'CASH' ? 'PENDING_RESTAURANT' : 'PENDING_PAYMENT';
       await tx.$executeRaw`
         INSERT INTO orders (
           id, public_ref, organization_id, establishment_id, customer_user_id,
           status, service, customer_name, customer_phone, notes, payment_method,
-          subtotal_amount, total_amount, placed_at, scheduled_for, created_at, updated_at
+          subtotal_amount, total_amount, coupon_code, discount_amount, placed_at, scheduled_for, created_at, updated_at
         ) VALUES (
           ${orderId}::uuid, ${publicRef}, ${establishment.organizationId}::uuid,
           ${establishment.id}::uuid, ${actor.userId}::uuid,
           ${initialStatus}::"OrderStatus", ${service}::"OrderService",
-          ${customerName}, ${customerPhone}, ${notes}, ${paymentMethod},
-          ${totalAmount}, ${totalAmount}, NOW(), ${scheduledFor}, NOW(), NOW()
+          ${customerName}, ${customerPhone}, ${notes}, ${chargedMethod},
+          ${subtotalAmount}, ${price.total}, ${price.couponCode}, ${price.discount}, NOW(), ${scheduledFor}, NOW(), NOW()
         )
       `;
 
@@ -282,7 +298,7 @@ export class OrdersService {
   async listMine(actor: AuthenticatedActor): Promise<OrderView[]> {
     const rows = await this.prisma.$queryRaw<OrderRow[]>`
       SELECT o.id, o.public_ref, o.establishment_id, o.status, o.service, o.payment_method,
-             o.customer_name, o.customer_phone, o.notes, o.total_amount, o.placed_at, o.scheduled_for, e.timezone,
+             o.customer_name, o.customer_phone, o.notes, o.total_amount, o.subtotal_amount, o.discount_amount, o.coupon_code, o.placed_at, o.scheduled_for, e.timezone,
              e.name AS establishment_name, e.slug AS establishment_slug
       FROM orders o
       JOIN establishments e ON e.id = o.establishment_id
@@ -337,7 +353,7 @@ export class OrdersService {
 
     const rows = await this.prisma.$queryRaw<OrderRow[]>`
       SELECT o.id, o.public_ref, o.establishment_id, o.status, o.service, o.payment_method,
-             o.customer_name, o.customer_phone, o.notes, o.total_amount, o.placed_at, o.scheduled_for, e.timezone,
+             o.customer_name, o.customer_phone, o.notes, o.total_amount, o.subtotal_amount, o.discount_amount, o.coupon_code, o.placed_at, o.scheduled_for, e.timezone,
              e.name AS establishment_name, e.slug AS establishment_slug
       FROM orders o
       JOIN establishments e ON e.id = o.establishment_id
@@ -434,7 +450,7 @@ export class OrdersService {
       : Prisma.sql``;
     const rows = await this.prisma.$queryRaw<OrderRow[]>`
       SELECT o.id, o.public_ref, o.establishment_id, o.status, o.service, o.payment_method,
-             o.customer_name, o.customer_phone, o.notes, o.total_amount, o.placed_at, o.scheduled_for, e.timezone,
+             o.customer_name, o.customer_phone, o.notes, o.total_amount, o.subtotal_amount, o.discount_amount, o.coupon_code, o.placed_at, o.scheduled_for, e.timezone,
              e.name AS establishment_name, e.slug AS establishment_slug
       FROM orders o
       JOIN establishments e ON e.id = o.establishment_id
@@ -490,6 +506,9 @@ export class OrdersService {
         linePrice: toMoneyView(toAmount(item.line_amount, 'ligne')),
       })),
       total: toMoneyView(toAmount(order.total_amount, 'total')),
+      subtotal: toMoneyView(toAmount(order.subtotal_amount, 'sous-total')),
+      discount: toMoneyView(toAmount(order.discount_amount, 'remise')),
+      couponCode: order.coupon_code,
       placedAt: new Date(order.placed_at).toISOString(),
       scheduledFor: order.scheduled_for ? new Date(order.scheduled_for).toISOString() : null,
       timezone: order.timezone,

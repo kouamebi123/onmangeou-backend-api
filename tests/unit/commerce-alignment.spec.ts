@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import { Clock } from '../../src/common/time/clock';
 import { CommerceService } from '../../src/domains/commerce/commerce.service';
 import { canAdvanceDelivery } from '../../src/domains/commerce/delivery-rules';
 import {
@@ -41,6 +42,7 @@ function fixture() {
       prisma as unknown as PrismaService,
       tenant as unknown as TenantScopeService,
       entitlements as unknown as EntitlementsService,
+      new Clock(),
     ),
   };
 }
