@@ -1,6 +1,6 @@
 import { Body, Controller, Get, Param, ParseUUIDPipe, Post, Query, Req } from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
-import { CurrentActor, RequirePermissions } from '../../common/auth/auth.decorators';
+import { CurrentActor, PublicRoute, RequirePermissions } from '../../common/auth/auth.decorators';
 import type { AuthenticatedActor } from '../../common/auth/authenticated-actor';
 import { PERMISSIONS } from '../../common/auth/permissions';
 import { Idempotent } from '../../common/idempotency/idempotent.decorator';
@@ -12,6 +12,12 @@ import { OrdersService, type OrderView } from './orders.service';
 @Controller({ version: '1' })
 export class OrdersController {
   constructor(private readonly orders: OrdersService) {}
+
+  @Get('restaurants/:id/order-slots')
+  @PublicRoute()
+  async slots(@Param('id', ParseUUIDPipe) id: string) {
+    return this.orders.schedule(id);
+  }
 
   @Post('orders')
   @Idempotent({ scope: 'orders.create' })

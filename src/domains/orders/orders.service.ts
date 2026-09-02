@@ -1,3 +1,5 @@
+import { Clock } from '../../common/time/clock';
+import { orderSchedule } from './order-schedule';
 import { randomUUID } from 'node:crypto';
 import { Injectable } from '@nestjs/common';
 import { Prisma } from '../../infrastructure/prisma/generated/client';
@@ -56,6 +58,8 @@ export interface OrderView {
   items: OrderItemView[];
   total: MoneyView;
   placedAt: string;
+  scheduledFor: string | null;
+  timezone: string;
 }
 
 interface OrderRow {
@@ -70,6 +74,8 @@ interface OrderRow {
   notes: string | null;
   total_amount: unknown;
   placed_at: Date;
+  scheduled_for: Date | null;
+  timezone: string;
   establishment_name: string;
   establishment_slug: string;
 }
@@ -89,7 +95,27 @@ export class OrdersService {
     private readonly prisma: PrismaService,
     private readonly tenant: TenantScopeService,
     private readonly entitlements: EntitlementsService,
+    private readonly clock: Clock,
   ) {}
+
+  async schedule(establishmentId: string) {
+    const restaurant = await this.prisma.establishment.findFirst({
+      where: { id: establishmentId, deletedAt: null, status: 'PUBLISHED' },
+      include: { hours: true, hoursExceptions: true },
+    });
+    if (!restaurant) throw notFound('Etablissement', establishmentId);
+    return orderSchedule(
+      this.clock.now(),
+      restaurant.hours,
+      restaurant.hoursExceptions.map((e) => ({
+        dateKey: e.exceptionDate.toISOString().slice(0, 10),
+        closed: e.closed,
+        opensAtMinutes: e.opensAtMinutes,
+        closesAtMinutes: e.closesAtMinutes,
+      })),
+      restaurant.timezone,
+    );
+  }
 
   async create(
     actor: AuthenticatedActor,
@@ -179,12 +205,26 @@ export class OrdersService {
     let scheduledFor: Date | null = null;
     if (dto.scheduledFor) {
       scheduledFor = new Date(dto.scheduledFor);
-      if (Number.isNaN(scheduledFor.getTime()) || scheduledFor.getTime() < Date.now() + 10 * 60_000) {
+      if (Number.isNaN(scheduledFor.getTime()) || scheduledFor.getTime() < this.clock.nowMs() + 10 * 60_000) {
         throw validationFailed([
           {
             field: 'scheduledFor',
             code: 'invalid',
             message: 'Le créneau doit être au moins dans 10 minutes',
+          },
+        ]);
+      }
+    }
+
+    if (source === 'marketplace' || scheduledFor) {
+      const schedule = await this.schedule(dto.establishmentId);
+      if (scheduledFor ? !schedule.slots.includes(scheduledFor.toISOString()) : !schedule.asapAvailable) {
+        throw validationFailed([
+          {
+            field: 'scheduledFor',
+            code: 'unavailable',
+            message:
+              'Ce créneau n’est plus disponible. Choisissez une heure pendant les horaires d’ouverture, dans les sept prochains jours.',
           },
         ]);
       }
@@ -242,7 +282,7 @@ export class OrdersService {
   async listMine(actor: AuthenticatedActor): Promise<OrderView[]> {
     const rows = await this.prisma.$queryRaw<OrderRow[]>`
       SELECT o.id, o.public_ref, o.establishment_id, o.status, o.service, o.payment_method,
-             o.customer_name, o.customer_phone, o.notes, o.total_amount, o.placed_at,
+             o.customer_name, o.customer_phone, o.notes, o.total_amount, o.placed_at, o.scheduled_for, e.timezone,
              e.name AS establishment_name, e.slug AS establishment_slug
       FROM orders o
       JOIN establishments e ON e.id = o.establishment_id
@@ -297,7 +337,7 @@ export class OrdersService {
 
     const rows = await this.prisma.$queryRaw<OrderRow[]>`
       SELECT o.id, o.public_ref, o.establishment_id, o.status, o.service, o.payment_method,
-             o.customer_name, o.customer_phone, o.notes, o.total_amount, o.placed_at,
+             o.customer_name, o.customer_phone, o.notes, o.total_amount, o.placed_at, o.scheduled_for, e.timezone,
              e.name AS establishment_name, e.slug AS establishment_slug
       FROM orders o
       JOIN establishments e ON e.id = o.establishment_id
@@ -394,7 +434,7 @@ export class OrdersService {
       : Prisma.sql``;
     const rows = await this.prisma.$queryRaw<OrderRow[]>`
       SELECT o.id, o.public_ref, o.establishment_id, o.status, o.service, o.payment_method,
-             o.customer_name, o.customer_phone, o.notes, o.total_amount, o.placed_at,
+             o.customer_name, o.customer_phone, o.notes, o.total_amount, o.placed_at, o.scheduled_for, e.timezone,
              e.name AS establishment_name, e.slug AS establishment_slug
       FROM orders o
       JOIN establishments e ON e.id = o.establishment_id
@@ -451,6 +491,8 @@ export class OrdersService {
       })),
       total: toMoneyView(toAmount(order.total_amount, 'total')),
       placedAt: new Date(order.placed_at).toISOString(),
+      scheduledFor: order.scheduled_for ? new Date(order.scheduled_for).toISOString() : null,
+      timezone: order.timezone,
     };
   }
 }
