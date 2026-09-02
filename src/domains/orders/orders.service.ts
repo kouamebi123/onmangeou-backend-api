@@ -263,12 +263,12 @@ export class OrdersService {
 
   async confirmPickup(actor: AuthenticatedActor, orderId: string): Promise<OrderView> {
     const current = await this.findOwned(orderId, actor.userId);
-    if (current.status !== 'READY') {
+    if (current.status !== 'READY' || current.service === 'DELIVERY') {
       throw new DomainError('CONFLICT', `Retrait impossible depuis ${current.status}`, {
         publicDetail: 'Le restaurant n’a pas encore annoncé que c’est prêt.',
       });
     }
-    await this.updateStatus(orderId, 'COMPLETED');
+    await this.updateStatus(orderId, 'COMPLETED', current.status);
     return this.loadView(orderId);
   }
 
@@ -279,7 +279,7 @@ export class OrdersService {
         publicDetail: 'Cette commande ne peut plus être annulée.',
       });
     }
-    await this.updateStatus(orderId, 'CANCELLED');
+    await this.updateStatus(orderId, 'CANCELLED', current.status);
     return this.loadView(orderId);
   }
 
@@ -319,13 +319,13 @@ export class OrdersService {
     await this.tenant.assertEstablishmentInScope(actor, current.establishmentId);
 
     const allowedFrom = MERCHANT_TRANSITIONS[status];
-    if (!allowedFrom?.includes(current.status)) {
+    if (!allowedFrom?.includes(current.status) || (status === 'COMPLETED' && current.service === 'DELIVERY')) {
       throw new DomainError('CONFLICT', `Transition ${current.status} → ${status} interdite`, {
         publicDetail: 'Cette étape n’est pas possible maintenant.',
       });
     }
 
-    await this.updateStatus(orderId, status);
+    await this.updateStatus(orderId, status, current.status);
     return this.loadView(orderId);
   }
 
@@ -334,9 +334,9 @@ export class OrdersService {
     return `OMO-${raw}`;
   }
 
-  private async findOwned(orderId: string, customerUserId: string): Promise<{ status: OrderStatus }> {
-    const rows = await this.prisma.$queryRaw<Array<{ status: OrderStatus }>>`
-      SELECT status FROM orders
+  private async findOwned(orderId: string, customerUserId: string): Promise<{ status: OrderStatus; service: OrderService }> {
+    const rows = await this.prisma.$queryRaw<Array<{ status: OrderStatus; service: OrderService }>>`
+      SELECT status, service FROM orders
       WHERE id = ${orderId}::uuid AND customer_user_id = ${customerUserId}::uuid
       LIMIT 1
     `;
@@ -349,23 +349,34 @@ export class OrdersService {
   private async findInOrganization(
     orderId: string,
     organizationId: string,
-  ): Promise<{ status: OrderStatus; establishmentId: string }> {
-    const rows = await this.prisma.$queryRaw<Array<{ status: OrderStatus; establishment_id: string }>>`
-      SELECT status, establishment_id FROM orders
+  ): Promise<{ status: OrderStatus; establishmentId: string; service: OrderService }> {
+    const rows = await this.prisma.$queryRaw<Array<{ status: OrderStatus; establishment_id: string; service: OrderService }>>`
+      SELECT status, establishment_id, service FROM orders
       WHERE id = ${orderId}::uuid AND organization_id = ${organizationId}::uuid
       LIMIT 1
     `;
     if (!rows[0]) {
       throw notFound('Commande', orderId);
     }
-    return { status: rows[0].status, establishmentId: rows[0].establishment_id };
+    return { status: rows[0].status, establishmentId: rows[0].establishment_id, service: rows[0].service };
   }
 
-  private async updateStatus(orderId: string, status: OrderStatus): Promise<void> {
-    await this.prisma.$executeRaw`
-      UPDATE orders SET status = ${status}::"OrderStatus", updated_at = NOW()
-      WHERE id = ${orderId}::uuid
-    `;
+  private async updateStatus(orderId: string, status: OrderStatus, previous: OrderStatus): Promise<void> {
+    await this.prisma.$transaction(async (tx) => {
+      const changed = await tx.$executeRaw`
+        UPDATE orders SET status = ${status}::"OrderStatus", updated_at = NOW()
+        WHERE id = ${orderId}::uuid AND status = ${previous}::"OrderStatus"
+      `;
+      if (!changed) throw new DomainError('CONFLICT', 'Commande modifiee', {
+        publicDetail: 'La commande a changé. Actualisez son suivi.',
+      });
+      if (status === 'CANCELLED' || status === 'REJECTED') {
+        await tx.$executeRaw`
+          UPDATE delivery_tasks SET status = 'CANCELLED', updated_at = NOW()
+          WHERE order_id = ${orderId}::uuid AND status <> 'DELIVERED'
+        `;
+      }
+    });
   }
 
   private async loadView(orderId: string, filter?: { customerUserId?: string }): Promise<OrderView> {

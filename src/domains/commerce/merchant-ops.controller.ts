@@ -16,6 +16,7 @@ import {
   OpenCashDto,
   ReviewResponseDto,
   ReservationStatusDto,
+  CreateTableDto,
   StockMoveDto,
 } from './commerce.dto';
 
@@ -23,6 +24,12 @@ import {
 @Controller({ version: '1' })
 export class MerchantOpsController {
   constructor(private readonly commerce: CommerceService) {}
+
+  @Get('admin/capabilities')
+  @RequirePermissions(PLATFORM_PERMISSIONS.ADMIN_ESTABLISHMENT_READ)
+  capabilities(@CurrentActor() actor: AuthenticatedActor) {
+    return { permissions: [...actor.permissions].filter((code) => code.startsWith('admin.')) };
+  }
 
   @Get('merchant/reservations')
   @RequirePermissions(PERMISSIONS.ORDERS_READ)
@@ -194,7 +201,7 @@ export class MerchantOpsController {
   @RequirePermissions(PERMISSIONS.ESTABLISHMENT_WRITE)
   async createTable(
     @CurrentActor() actor: AuthenticatedActor,
-    @Body() body: { establishmentId: string; name: string; seats: number },
+    @Body() body: CreateTableDto,
   ) {
     return this.commerce.createTable(actor, body.establishmentId, body.name, body.seats);
   }
@@ -225,10 +232,10 @@ export class MerchantOpsController {
   }
 
   @Post('admin/orders/:id/refund')
-  @RequirePermissions(PLATFORM_PERMISSIONS.ADMIN_ESTABLISHMENT_READ)
+  @RequirePermissions(PLATFORM_PERMISSIONS.ADMIN_PAYMENT_REFUND)
   @ApiOperation({ summary: 'Rembourser un paiement sandbox' })
-  async refundOrder(@Param('id', ParseUUIDPipe) id: string) {
-    return this.commerce.refundOrder(id);
+  async refundOrder(@CurrentActor() actor: AuthenticatedActor, @Param('id', ParseUUIDPipe) id: string) {
+    return this.commerce.refundOrder(actor, id);
   }
 
   @Get('admin/reviews')
@@ -238,9 +245,9 @@ export class MerchantOpsController {
   }
 
   @Post('admin/reviews/:id/hide')
-  @RequirePermissions(PLATFORM_PERMISSIONS.ADMIN_ESTABLISHMENT_READ)
-  async hideReview(@Param('id', ParseUUIDPipe) id: string) {
-    return this.commerce.hideReview(id);
+  @RequirePermissions(PLATFORM_PERMISSIONS.ADMIN_REVIEW_MODERATE)
+  async hideReview(@CurrentActor() actor: AuthenticatedActor, @Param('id', ParseUUIDPipe) id: string) {
+    return this.commerce.hideReview(actor, id);
   }
 
   @Get('admin/support-tickets')
@@ -250,8 +257,8 @@ export class MerchantOpsController {
   }
 
   @Post('admin/support-tickets/:id/close')
-  @RequirePermissions(PLATFORM_PERMISSIONS.ADMIN_ESTABLISHMENT_READ)
-  async closeTicket(@Param('id', ParseUUIDPipe) id: string) {
-    return this.commerce.closeTicket(id);
+  @RequirePermissions(PLATFORM_PERMISSIONS.ADMIN_SUPPORT_WRITE)
+  async closeTicket(@CurrentActor() actor: AuthenticatedActor, @Param('id', ParseUUIDPipe) id: string) {
+    return this.commerce.closeTicket(actor, id);
   }
 }

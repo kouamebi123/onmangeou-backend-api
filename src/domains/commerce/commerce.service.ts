@@ -10,6 +10,7 @@ import { EntitlementsService } from '../entitlements/entitlements.service';
 import { MODULE_CODES, type ModuleCode } from '../entitlements/module-codes';
 import { notifyUser } from './notify';
 import { canChangeReservationStatus } from './reservation-rules';
+import { canAdvanceDelivery } from './delivery-rules';
 import type {
   CashMovementDto,
   CreateCreditDto,
@@ -231,41 +232,45 @@ export class CommerceService {
   }
 
   private async succeedIntent(intentId: string, userId?: string) {
-    const rows = await this.prisma.$queryRaw<
-      Array<{ id: string; order_id: string; user_id: string; status: string }>
-    >`
-      SELECT id, order_id, user_id, status FROM payment_intents WHERE id = ${intentId}::uuid LIMIT 1
+    const refs = await this.prisma.$queryRaw<Array<{ order_id: string; user_id: string }>>`
+      SELECT order_id, user_id FROM payment_intents WHERE id = ${intentId}::uuid
     `;
-    const intent = rows[0];
-    if (!intent || (userId && intent.user_id !== userId)) {
-      throw notFound('Paiement', intentId);
-    }
-    if (intent.status === 'SUCCEEDED') {
-      return { id: intent.id, status: 'SUCCEEDED', replayed: true };
-    }
-    await this.prisma.$executeRaw`
-      UPDATE payment_intents SET status = 'SUCCEEDED', updated_at = NOW() WHERE id = ${intentId}::uuid
-    `;
-    await this.prisma.$executeRaw`
-      UPDATE orders SET status = 'PENDING_RESTAURANT'::"OrderStatus", paid_at = NOW(), updated_at = NOW()
-      WHERE id = ${intent.order_id}::uuid AND status = 'PENDING_PAYMENT'::"OrderStatus"
-    `;
-    const owners = await this.prisma.$queryRaw<Array<{ user_id: string }>>`
-      SELECT om.user_id
-      FROM orders o
-      JOIN organization_members om ON om.organization_id = o.organization_id
-      WHERE o.id = ${intent.order_id}::uuid
-    `;
-    for (const owner of owners) {
-      await notifyUser(
-        this.prisma,
-        owner.user_id,
-        'ORDER',
-        'Nouvelle commande payée',
-        'Un ticket attend en cuisine.',
-      );
-    }
-    return { id: intent.id, status: 'SUCCEEDED', replayed: false };
+    if (!refs[0] || (userId && refs[0].user_id !== userId)) throw notFound('Paiement', intentId);
+    const orderId = refs[0].order_id;
+    return this.prisma.$transaction(async (tx) => {
+      const orders = await tx.$queryRaw<Array<{ status: string }>>`
+        SELECT status FROM orders WHERE id = ${orderId}::uuid FOR UPDATE
+      `;
+      const intents = await tx.$queryRaw<Array<{ status: string }>>`
+        SELECT status FROM payment_intents WHERE id = ${intentId}::uuid FOR UPDATE
+      `;
+      const intent = intents[0], order = orders[0];
+      if (!intent || !order) throw notFound('Paiement', intentId);
+      if (intent.status === 'SUCCEEDED') return { id: intentId, status: 'SUCCEEDED', replayed: true };
+      if (intent.status !== 'REQUIRES_ACTION' || order.status !== 'PENDING_PAYMENT') {
+        throw new DomainError('CONFLICT', 'Paiement non confirmable', {
+          publicDetail: 'Ce paiement ne peut plus être confirmé. Actualisez votre commande.',
+        });
+      }
+      await tx.$executeRaw`
+        UPDATE payment_intents SET status = 'SUCCEEDED', updated_at = NOW() WHERE id = ${intentId}::uuid
+      `;
+      await tx.$executeRaw`
+        UPDATE orders SET status = 'PENDING_RESTAURANT'::"OrderStatus", paid_at = NOW(), updated_at = NOW()
+        WHERE id = ${orderId}::uuid
+      `;
+      const owners = await tx.$queryRaw<Array<{ user_id: string }>>`
+        SELECT om.user_id FROM organization_members om
+        JOIN orders o ON o.organization_id = om.organization_id WHERE o.id = ${orderId}::uuid
+      `;
+      for (const owner of owners) {
+        await tx.$executeRaw`
+          INSERT INTO notifications (id, user_id, title, body, kind, created_at)
+          VALUES (${randomUUID()}::uuid, ${owner.user_id}::uuid, 'Nouvelle commande payée', 'Un ticket attend en cuisine.', 'ORDER', NOW())
+        `;
+      }
+      return { id: intentId, status: 'SUCCEEDED', replayed: false };
+    });
   }
 
   async listNotifications(actor: AuthenticatedActor) {
@@ -385,40 +390,76 @@ export class CommerceService {
       ? Prisma.sql`AND r.establishment_id = ${establishmentId}::uuid`
       : Prisma.sql``;
     return this.prisma.$queryRaw`
-      SELECT r.id, r.public_ref, r.status, r.party_size, r.starts_at, r.customer_name, r.customer_phone, r.notes,
+      SELECT r.id, r.public_ref, r.status, r.party_size, r.starts_at, r.customer_name, r.customer_phone, r.notes, r.table_id,
+             (SELECT name FROM dining_tables WHERE id = r.table_id) AS table_name,
              e.name AS establishment_name, e.timezone
       FROM reservations r
       JOIN establishments e ON e.id = r.establishment_id
       WHERE r.organization_id = ${organizationId}::uuid
       ${scope}
+      AND r.status IN ('REQUESTED', 'CONFIRMED', 'SEATED')
       ORDER BY r.starts_at ASC
-      LIMIT 80
     `;
   }
 
   async changeReservationStatus(actor: AuthenticatedActor, reservationId: string, status: string) {
     const organizationId = this.tenant.requireOrganization(actor);
-    const rows = await this.prisma.$queryRaw<Array<{ establishment_id: string; status: string }>>`
-      SELECT establishment_id, status FROM reservations
+    const scope = await this.prisma.$queryRaw<Array<{ establishment_id: string }>>`
+      SELECT establishment_id FROM reservations
       WHERE id = ${reservationId}::uuid AND organization_id = ${organizationId}::uuid
     `;
-    if (!rows[0]) {
-      throw notFound('Reservation', reservationId);
-    }
-    await this.requireModules(actor, [MODULE_CODES.RESERVATIONS_TABLES], rows[0].establishment_id);
-    await this.tenant.assertEstablishmentInScope(actor, rows[0].establishment_id);
-    if (!canChangeReservationStatus(rows[0].status, status)) {
-      throw new DomainError('CONFLICT', 'Transition de reservation invalide', {
-        publicDetail: 'Cette action ne correspond plus au statut de la réservation.',
-      });
-    }
-    const changed = await this.prisma.$executeRaw`
-      UPDATE reservations SET status = ${status}, updated_at = NOW()
-      WHERE id = ${reservationId}::uuid AND organization_id = ${organizationId}::uuid
-        AND status = ${rows[0].status}
-    `;
-    if (!changed) throw new DomainError('CONFLICT', 'Reservation modifiee', {
-      publicDetail: 'Cette réservation a changé. Actualisez la liste.',
+    if (!scope[0]) throw notFound('Reservation', reservationId);
+    const establishmentId = scope[0].establishment_id;
+    await this.requireModules(actor, [MODULE_CODES.RESERVATIONS_TABLES], establishmentId);
+    await this.tenant.assertEstablishmentInScope(actor, establishmentId);
+    await this.prisma.$transaction(async (tx) => {
+      // Serializes allocation for the establishment, including different reservations.
+      await tx.$queryRaw`SELECT id FROM establishments WHERE id = ${establishmentId}::uuid FOR UPDATE`;
+      const rows = await tx.$queryRaw<Array<{ status: string; starts_at: Date; party_size: number; table_id: string | null }>>`
+        SELECT status, starts_at, party_size, table_id FROM reservations
+        WHERE id = ${reservationId}::uuid FOR UPDATE
+      `;
+      const current = rows[0];
+      if (!current) throw notFound('Reservation', reservationId);
+      if (current.status === status) return;
+      if (!canChangeReservationStatus(current.status, status)) {
+        throw new DomainError('CONFLICT', 'Transition de reservation invalide', {
+          publicDetail: 'Cette action ne correspond plus au statut de la réservation.',
+        });
+      }
+      let tableId = current.table_id;
+      if (status === 'NO_SHOW' && current.starts_at.getTime() > Date.now()) {
+        throw validationFailed([{ field: 'status', code: 'early', message: 'Le client ne peut pas être déclaré absent avant l’heure prévue.' }]);
+      }
+      if (status === 'CONFIRMED' || status === 'SEATED') {
+        if (status === 'CONFIRMED' && current.starts_at.getTime() <= Date.now()) {
+          throw validationFailed([{ field: 'startsAt', code: 'past', message: 'Cette réservation est passée.' }]);
+        }
+        const available = await tx.$queryRaw<Array<{ id: string }>>`
+          SELECT t.id FROM dining_tables t
+          WHERE t.establishment_id = ${establishmentId}::uuid AND t.seats >= ${current.party_size}
+            AND NOT EXISTS (
+              SELECT 1 FROM reservations r
+              WHERE r.establishment_id = ${establishmentId}::uuid AND r.id <> ${reservationId}::uuid
+                AND (r.table_id = t.id OR r.table_id IS NULL)
+                AND (
+                  (r.status = 'SEATED' AND (${status} = 'SEATED' OR r.starts_at + INTERVAL '2 hours' > ${current.starts_at}))
+                  OR (r.status = 'CONFIRMED' AND r.starts_at < ${current.starts_at} + INTERVAL '2 hours'
+                    AND r.starts_at + INTERVAL '2 hours' > ${current.starts_at})
+                )
+            )
+          ORDER BY (t.id = ${tableId}::uuid) DESC NULLS LAST, t.seats ASC, t.name ASC
+          LIMIT 1
+        `;
+        if (!available[0]) throw new DomainError('CONFLICT', 'Aucune table disponible', {
+          publicDetail: 'Aucune table adaptée n’est disponible pour ces deux heures. Vérifiez vos tables et les réservations existantes.',
+        });
+        tableId = available[0].id;
+      }
+      await tx.$executeRaw`
+        UPDATE reservations SET status = ${status}, table_id = ${tableId}::uuid, updated_at = NOW()
+        WHERE id = ${reservationId}::uuid
+      `;
     });
     return this.getReservation(reservationId);
   }
@@ -474,6 +515,9 @@ export class CommerceService {
   }
 
   async respondReview(actor: AuthenticatedActor, reviewId: string, dto: ReviewResponseDto) {
+    if (dto.body.trim().length < 2) {
+      throw validationFailed([{ field: 'body', code: 'short', message: 'Votre réponse doit contenir au moins deux caractères.' }]);
+    }
     const organizationId = this.tenant.requireOrganization(actor);
     const rows = await this.prisma.$queryRaw<Array<{ establishment_id: string }>>`
       SELECT e.id AS establishment_id
@@ -794,8 +838,8 @@ export class CommerceService {
     const scope = establishmentId
       ? Prisma.sql`AND o.establishment_id = ${establishmentId}::uuid`
       : Prisma.sql``;
-    return this.prisma.$queryRaw`
-      SELECT t.id, t.order_id, t.status, t.courier_name, t.address_text, o.public_ref, o.customer_name
+    const rows = await this.prisma.$queryRaw<Array<{ id: string; status: string; order_status: string; service: string; public_ref: string; customer_name: string; address_text: string | null }>>`
+      SELECT t.id, t.order_id, t.status, t.courier_name, t.address_text, o.public_ref, o.customer_name, o.status AS order_status, o.service
       FROM delivery_tasks t
       JOIN orders o ON o.id = t.order_id
       WHERE o.organization_id = ${organizationId}::uuid
@@ -803,27 +847,49 @@ export class CommerceService {
       ORDER BY t.created_at DESC
       LIMIT 50
     `;
+    return rows.map((row) => ({ ...row, allowedActions: ['ASSIGNED', 'PICKED_UP', 'DELIVERING', 'DELIVERED'].filter((next) => canAdvanceDelivery(row.status, next, row.order_status, row.service)) }));
   }
 
   async changeDelivery(actor: AuthenticatedActor, taskId: string, dto: DeliveryStatusDto) {
     const organizationId = this.tenant.requireOrganization(actor);
-    const rows = await this.prisma.$queryRaw<Array<{ establishment_id: string }>>`
-      SELECT o.establishment_id
-      FROM delivery_tasks t
+    const scope = await this.prisma.$queryRaw<Array<{ establishment_id: string; order_id: string }>>`
+      SELECT o.establishment_id, o.id AS order_id FROM delivery_tasks t
       JOIN orders o ON o.id = t.order_id
       WHERE t.id = ${taskId}::uuid AND o.organization_id = ${organizationId}::uuid
     `;
-    if (!rows[0]) {
-      throw notFound('Livraison', taskId);
-    }
-    await this.requireModules(actor, [MODULE_CODES.DELIVERY_INTERNAL], rows[0].establishment_id);
-    await this.tenant.assertEstablishmentInScope(actor, rows[0].establishment_id);
-    await this.prisma.$executeRaw`
-      UPDATE delivery_tasks
-      SET status = ${dto.status}, courier_name = COALESCE(${dto.courierName ?? null}, courier_name), updated_at = NOW()
-      WHERE id = ${taskId}::uuid
-    `;
-    return { id: taskId, status: dto.status };
+    if (!scope[0]) throw notFound('Livraison', taskId);
+    await this.requireModules(actor, [MODULE_CODES.DELIVERY_INTERNAL], scope[0].establishment_id);
+    await this.tenant.assertEstablishmentInScope(actor, scope[0].establishment_id);
+    const orderId = scope[0].order_id;
+    return this.prisma.$transaction(async (tx) => {
+      // Lock order before task, as in order cancellation, to avoid deadlocks.
+      const orders = await tx.$queryRaw<Array<{ status: string; service: string }>>`
+        SELECT status, service FROM orders WHERE id = ${orderId}::uuid FOR UPDATE
+      `;
+      const tasks = await tx.$queryRaw<Array<{ status: string }>>`
+        SELECT status FROM delivery_tasks WHERE id = ${taskId}::uuid FOR UPDATE
+      `;
+      const order = orders[0], task = tasks[0];
+      if (!order || !task) throw notFound('Livraison', taskId);
+      if (task.status === dto.status) return { id: taskId, status: task.status };
+      if (!canAdvanceDelivery(task.status, dto.status, order.status, order.service)) {
+        throw new DomainError('CONFLICT', 'Transition de livraison invalide', {
+          publicDetail: 'Respectez les étapes de livraison et attendez que la commande soit prête.',
+        });
+      }
+      await tx.$executeRaw`
+        UPDATE delivery_tasks SET status = ${dto.status},
+          courier_name = COALESCE(${dto.courierName ?? null}, courier_name), updated_at = NOW()
+        WHERE id = ${taskId}::uuid
+      `;
+      if (dto.status === 'DELIVERED') {
+        await tx.$executeRaw`
+          UPDATE orders SET status = 'COMPLETED'::"OrderStatus", updated_at = NOW()
+          WHERE id = ${orderId}::uuid
+        `;
+      }
+      return { id: taskId, status: dto.status };
+    });
   }
 
   async createSupportTicket(actor: AuthenticatedActor, dto: SupportTicketDto) {
@@ -878,7 +944,7 @@ export class CommerceService {
     }));
   }
 
-  async refundOrder(orderId: string) {
+  async refundOrder(actor: AuthenticatedActor, orderId: string) {
     const intents = await this.prisma.$queryRaw<Array<{ id: string; status: string }>>`
       SELECT id, status FROM payment_intents
       WHERE order_id = ${orderId}::uuid
@@ -897,9 +963,16 @@ export class CommerceService {
         publicDetail: 'Seul un paiement sandbox abouti peut etre rembourse.',
       });
     }
-    await this.prisma.$executeRaw`
-      UPDATE payment_intents SET status = 'REFUNDED', updated_at = NOW() WHERE id = ${intent.id}::uuid
-    `;
+    await this.prisma.$transaction(async (tx) => {
+      const changed = await tx.$executeRaw`
+        UPDATE payment_intents SET status = 'REFUNDED', updated_at = NOW()
+        WHERE id = ${intent.id}::uuid AND status = 'SUCCEEDED'
+      `;
+      if (changed) await tx.auditLog.create({ data: {
+        actorUserId: actor.userId, action: 'admin.payment.refund', resourceType: 'order', resourceId: orderId,
+        beforeState: { status: 'SUCCEEDED' }, afterState: { status: 'REFUNDED', sandbox: true },
+      } });
+    });
     return { id: orderId, paymentStatus: 'REFUNDED' };
   }
 
@@ -913,16 +986,20 @@ export class CommerceService {
     `;
   }
 
-  async hideReview(reviewId: string) {
+  async hideReview(actor: AuthenticatedActor, reviewId: string) {
     const rows = await this.prisma.$queryRaw<Array<{ id: string }>>`
       SELECT id FROM reviews WHERE id = ${reviewId}::uuid
     `;
     if (!rows[0]) {
       throw notFound('Avis', reviewId);
     }
-    await this.prisma.$executeRaw`
-      UPDATE reviews SET status = 'HIDDEN' WHERE id = ${reviewId}::uuid
-    `;
+    await this.prisma.$transaction(async (tx) => {
+      const changed = await tx.$executeRaw`UPDATE reviews SET status = 'HIDDEN' WHERE id = ${reviewId}::uuid AND status <> 'HIDDEN'`;
+      if (changed) await tx.auditLog.create({ data: {
+        actorUserId: actor.userId, action: 'admin.review.moderate', resourceType: 'review', resourceId: reviewId,
+        afterState: { status: 'HIDDEN' },
+      } });
+    });
     return { id: reviewId, status: 'HIDDEN' };
   }
 
@@ -936,10 +1013,17 @@ export class CommerceService {
     `;
   }
 
-  async closeTicket(ticketId: string) {
-    await this.prisma.$executeRaw`
-      UPDATE support_tickets SET status = 'CLOSED' WHERE id = ${ticketId}::uuid
-    `;
+  async closeTicket(actor: AuthenticatedActor, ticketId: string) {
+    await this.prisma.$transaction(async (tx) => {
+      const rows = await tx.$queryRaw<Array<{ status: string }>>`SELECT status FROM support_tickets WHERE id = ${ticketId}::uuid FOR UPDATE`;
+      if (!rows[0]) throw notFound('Ticket', ticketId);
+      if (rows[0].status === 'CLOSED') return;
+      await tx.$executeRaw`UPDATE support_tickets SET status = 'CLOSED' WHERE id = ${ticketId}::uuid`;
+      await tx.auditLog.create({ data: {
+        actorUserId: actor.userId, action: 'admin.support.write', resourceType: 'support_ticket', resourceId: ticketId,
+        beforeState: { status: rows[0].status }, afterState: { status: 'CLOSED' },
+      } });
+    });
     return { id: ticketId, status: 'CLOSED' };
   }
 
@@ -977,6 +1061,9 @@ export class CommerceService {
   async createTable(actor: AuthenticatedActor, establishmentId: string, name: string, seats: number) {
     await this.requireModules(actor, [MODULE_CODES.RESERVATIONS_TABLES], establishmentId);
     await this.tenant.assertEstablishmentInScope(actor, establishmentId);
+    if (!name?.trim() || name.trim().length > 80 || !Number.isInteger(seats) || seats < 1 || seats > 100) {
+      throw validationFailed([{ field: 'seats', code: 'invalid', message: 'Indiquez un nom et un nombre de places entre 1 et 100.' }]);
+    }
     const id = randomUUID();
     await this.prisma.$executeRaw`
       INSERT INTO dining_tables (id, establishment_id, name, seats, created_at)

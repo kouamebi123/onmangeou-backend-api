@@ -74,6 +74,24 @@ export class ReservationStatusDto {
   status!: string;
 }
 
+export class CreateTableDto {
+  @ApiProperty()
+  @IsUUID()
+  establishmentId!: string;
+
+  @ApiProperty()
+  @IsString()
+  @MaxLength(80)
+  name!: string;
+
+  @ApiProperty({ minimum: 1, maximum: 100 })
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(100)
+  seats!: number;
+}
+
 export class CreateReviewDto {
   @ApiProperty()
   @IsUUID()

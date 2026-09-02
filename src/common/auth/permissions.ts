@@ -69,6 +69,9 @@ export const PLATFORM_PERMISSIONS = {
   ADMIN_USER_READ: 'admin.user.read',
   ADMIN_BILLING_READ: 'admin.billing.read',
   ADMIN_BILLING_WRITE: 'admin.billing.write',
+  ADMIN_PAYMENT_REFUND: 'admin.payment.refund',
+  ADMIN_REVIEW_MODERATE: 'admin.review.moderate',
+  ADMIN_SUPPORT_WRITE: 'admin.support.write',
 } as const;
 
 export type PlatformPermissionCode = (typeof PLATFORM_PERMISSIONS)[keyof typeof PLATFORM_PERMISSIONS];
@@ -99,6 +102,7 @@ export const REAUTH_REQUIRED_PERMISSIONS: ReadonlySet<string> = new Set<string>(
   PERMISSIONS.ROLE_ASSIGN,
   PERMISSIONS.MEMBER_WRITE,
   PLATFORM_PERMISSIONS.ADMIN_VERIFICATION_DECIDE,
+  PLATFORM_PERMISSIONS.ADMIN_PAYMENT_REFUND,
 ]);
 
 export const ROLE_CODES = {

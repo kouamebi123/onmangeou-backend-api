@@ -1,0 +1,105 @@
+import { describe, expect, it, vi } from 'vitest';
+import { CommerceService } from '../../src/domains/commerce/commerce.service';
+import { canAdvanceDelivery } from '../../src/domains/commerce/delivery-rules';
+import { PLATFORM_PERMISSIONS, PLATFORM_ROLE_PERMISSION_MATRIX, REAUTH_REQUIRED_PERMISSIONS } from '../../src/common/auth/permissions';
+import type { PrismaService } from '../../src/infrastructure/prisma/prisma.service';
+import type { TenantScopeService } from '../../src/common/auth/tenant-scope.service';
+import type { EntitlementsService } from '../../src/domains/entitlements/entitlements.service';
+import type { AuthenticatedActor } from '../../src/common/auth/authenticated-actor';
+
+const actor: AuthenticatedActor = { userId: 'user', sessionId: 'session', organizationId: 'org', establishmentIds: ['est'], permissions: new Set() };
+function fixture() {
+  const tx = {
+    $queryRaw: vi.fn<(strings: TemplateStringsArray, ...values: unknown[]) => Promise<unknown[]>>(),
+    $executeRaw: vi.fn<(strings: TemplateStringsArray, ...values: unknown[]) => Promise<number>>().mockResolvedValue(1),
+  };
+  const prisma = {
+    $queryRaw: vi.fn(),
+    $transaction: vi.fn(async (callback: (value: typeof tx) => Promise<unknown>) => callback(tx)),
+  };
+  const tenant = { requireOrganization: () => 'org', assertEstablishmentInScope: vi.fn().mockResolvedValue(undefined) };
+  const entitlements = { isModuleEnabled: vi.fn().mockResolvedValue(true) };
+  return { tx, prisma, service: new CommerceService(prisma as unknown as PrismaService, tenant as unknown as TenantScopeService, entitlements as unknown as EntitlementsService) };
+}
+
+describe('Delivery contract', () => {
+  it('only permits ordered steps on an accepted or ready delivery order', () => {
+    expect(canAdvanceDelivery('UNASSIGNED', 'ASSIGNED', 'ACCEPTED', 'DELIVERY')).toBe(true);
+    expect(canAdvanceDelivery('ASSIGNED', 'PICKED_UP', 'READY', 'DELIVERY')).toBe(true);
+    expect(canAdvanceDelivery('PICKED_UP', 'DELIVERING', 'READY', 'DELIVERY')).toBe(true);
+    expect(canAdvanceDelivery('DELIVERING', 'DELIVERED', 'READY', 'DELIVERY')).toBe(true);
+    expect(canAdvanceDelivery('ASSIGNED', 'DELIVERED', 'READY', 'DELIVERY')).toBe(false);
+    expect(canAdvanceDelivery('ASSIGNED', 'PICKED_UP', 'PREPARING', 'DELIVERY')).toBe(false);
+    expect(canAdvanceDelivery('DELIVERING', 'DELIVERED', 'CANCELLED', 'DELIVERY')).toBe(false);
+    expect(canAdvanceDelivery('DELIVERING', 'DELIVERED', 'READY', 'TAKEAWAY')).toBe(false);
+  });
+  it('writes delivery and order completion inside the same transaction', async () => {
+    const f = fixture();
+    f.prisma.$queryRaw.mockResolvedValue([{ establishment_id: 'est', order_id: 'order' }]);
+    f.tx.$queryRaw.mockResolvedValueOnce([{ status: 'READY', service: 'DELIVERY' }]).mockResolvedValueOnce([{ status: 'DELIVERING' }]);
+    await f.service.changeDelivery(actor, 'task', { status: 'DELIVERED' });
+    expect(f.prisma.$transaction).toHaveBeenCalledOnce();
+    expect(f.tx.$executeRaw).toHaveBeenCalledTimes(2);
+    expect(f.tx.$executeRaw.mock.calls[1]?.[0].join('')).toContain("status = 'COMPLETED'");
+  });
+  it('does not write an out-of-order delivery', async () => {
+    const f = fixture();
+    f.prisma.$queryRaw.mockResolvedValue([{ establishment_id: 'est', order_id: 'order' }]);
+    f.tx.$queryRaw.mockResolvedValueOnce([{ status: 'READY', service: 'DELIVERY' }]).mockResolvedValueOnce([{ status: 'ASSIGNED' }]);
+    await expect(f.service.changeDelivery(actor, 'task', { status: 'DELIVERED' })).rejects.toThrow();
+    expect(f.tx.$executeRaw).not.toHaveBeenCalled();
+  });
+});
+
+describe('Table allocation', () => {
+  it('refuses confirmation when no suitable table is available', async () => {
+    const f = fixture();
+    f.prisma.$queryRaw.mockResolvedValue([{ establishment_id: 'est' }]);
+    f.tx.$queryRaw.mockResolvedValueOnce([]).mockResolvedValueOnce([{ status: 'REQUESTED', starts_at: new Date('2099-01-01'), party_size: 4, table_id: null }]).mockResolvedValueOnce([]);
+    await expect(f.service.changeReservationStatus(actor, 'reservation', 'CONFIRMED')).rejects.toThrow();
+    expect(f.tx.$executeRaw).not.toHaveBeenCalled();
+  });
+  it('locks the establishment and records the selected table', async () => {
+    const f = fixture();
+    f.prisma.$queryRaw.mockResolvedValueOnce([{ establishment_id: 'est' }]).mockResolvedValueOnce([{ id: 'reservation' }]);
+    f.tx.$queryRaw.mockResolvedValueOnce([]).mockResolvedValueOnce([{ status: 'REQUESTED', starts_at: new Date('2099-01-01'), party_size: 4, table_id: null }]).mockResolvedValueOnce([{ id: 'table' }]);
+    await f.service.changeReservationStatus(actor, 'reservation', 'CONFIRMED');
+    expect(f.tx.$queryRaw.mock.calls[0]?.[0].join('')).toContain('FOR UPDATE');
+    expect(f.tx.$queryRaw.mock.calls[2]?.[0].join('')).toContain('NOT EXISTS');
+    expect(f.tx.$executeRaw.mock.calls[0]).toContain('table');
+  });
+});
+
+describe('Sandbox payment consistency', () => {
+  it('does not confirm a cancelled order', async () => {
+    const f = fixture();
+    f.prisma.$queryRaw.mockResolvedValue([{ order_id: 'order', user_id: actor.userId }]);
+    f.tx.$queryRaw.mockResolvedValueOnce([{ status: 'CANCELLED' }]).mockResolvedValueOnce([{ status: 'REQUIRES_ACTION' }]);
+    await expect(f.service.confirmSandboxIntent(actor, 'intent')).rejects.toThrow();
+    expect(f.tx.$executeRaw).not.toHaveBeenCalled();
+  });
+  it('never resurrects a refunded payment', async () => {
+    const f = fixture();
+    f.prisma.$queryRaw.mockResolvedValue([{ order_id: 'order', user_id: actor.userId }]);
+    f.tx.$queryRaw.mockResolvedValueOnce([{ status: 'PENDING_PAYMENT' }]).mockResolvedValueOnce([{ status: 'REFUNDED' }]);
+    await expect(f.service.confirmSandboxIntent(actor, 'intent')).rejects.toThrow();
+    expect(f.tx.$executeRaw).not.toHaveBeenCalled();
+  });
+  it('replays successful confirmation without another write', async () => {
+    const f = fixture();
+    f.prisma.$queryRaw.mockResolvedValue([{ order_id: 'order', user_id: actor.userId }]);
+    f.tx.$queryRaw.mockResolvedValueOnce([{ status: 'PENDING_RESTAURANT' }]).mockResolvedValueOnce([{ status: 'SUCCEEDED' }]);
+    expect(await f.service.confirmSandboxIntent(actor, 'intent')).toEqual({ id: 'intent', status: 'SUCCEEDED', replayed: true });
+    expect(f.tx.$executeRaw).not.toHaveBeenCalled();
+  });
+});
+
+describe('Administrative write permissions', () => {
+  it('does not grant mutation permissions to read-only support', () => {
+    for (const code of [PLATFORM_PERMISSIONS.ADMIN_PAYMENT_REFUND, PLATFORM_PERMISSIONS.ADMIN_REVIEW_MODERATE, PLATFORM_PERMISSIONS.ADMIN_SUPPORT_WRITE]) {
+      expect(PLATFORM_ROLE_PERMISSION_MATRIX.ADMIN).toContain(code);
+      expect(PLATFORM_ROLE_PERMISSION_MATRIX.SUPPORT).not.toContain(code);
+    }
+    expect(REAUTH_REQUIRED_PERMISSIONS.has(PLATFORM_PERMISSIONS.ADMIN_PAYMENT_REFUND)).toBe(true);
+  });
+});

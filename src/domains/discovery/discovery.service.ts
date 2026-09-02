@@ -35,6 +35,7 @@ export interface RestaurantSummary {
 }
 
 export interface RestaurantDetail extends RestaurantSummary {
+  timezone: string;
   description: string | null;
   phoneE164: string | null;
   addressLine: string | null;

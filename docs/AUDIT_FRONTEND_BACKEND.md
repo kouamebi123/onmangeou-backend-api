@@ -1,101 +1,99 @@
-# Audit ciblé frontend / backend — 2 septembre 2026
+# Audit ciblé frontend / backend — correctifs du 2 septembre 2026
 
-## Périmètre et méthode
+## Périmètre
 
-Lecture des contrats HTTP, DTO, services et consommateurs des quatre frontends.
-Il s'agit d'un audit statique ciblé, pas d'une recette complète ni d'une certification
-d'absence de défaut. Aucune transaction, commande ni réservation de production
-n'a été créée pour cet audit.
+Contrats HTTP, DTO, services et consommateurs des quatre frontends.
+Ce document décrit les écarts identifiés et les correctifs apportés ; il ne
+certifie pas l'absence de tout défaut. Aucune donnée de production n'a été
+modifiée pendant ces vérifications.
 
-Références de départ :
-- Backend : f9c32fd64c82d87c3c8e2180d3c43ced6db622e7.
-- Client mobile : 5e831b699b9991c069649317093a3896b1477dd7.
-- Restaurant mobile : 12dab3fcfe75f3632e24d37d522f5ea67901a442.
-- Web public et administration : branches main récupérées pour inspection.
+## Correctifs livrés
 
-## Correctifs de réservation et d'avis livrés ensemble
+### Paiement simulé
 
-- POST /reservations et POST /reviews : envoi de la clé Idempotency-Key exigée.
-  La clé est conservée lors d'une nouvelle tentative du même formulaire.
-- Date de réservation : conversion explicite depuis le fuseau du restaurant.
-  Le backend expose timezone ; les écrans affichent date, heure et statut.
-- Une réservation n'est pas une confirmation de disponibilité : les créneaux
-  proposés sont des heures de demande, pas un inventaire des tables libres.
-- Statuts : REQUESTED → CONFIRMED ou REJECTED ; CONFIRMED → SEATED, CANCELLED
-  ou NO_SHOW ; SEATED → COMPLETED. Les statuts terminaux ne se rouvrent pas.
-  Les mises à jour concurrentes sont contrôlées par le backend.
-- Avis : propriétaire de la commande uniquement, commande COMPLETED obligatoire,
-  choix 1–5, un avis par commande et modification de l'avis existant.
-  Modifier un avis masqué ne le republie pas.
-- GET /orders/:id/review : retourne uniquement l'avis du client connecté.
-- Badge verified calculé à partir d'une commande terminée appartenant à l'auteur.
+Le client envoie Idempotency-Key et conserve la clé pour une nouvelle tentative
+du même paiement. Il réutilise l'intention si la confirmation échoue.
+La confirmation verrouille commande et intention dans une transaction :
+seule une commande PENDING_PAYMENT peut être payée, un paiement remboursé ne
+peut pas être réactivé, et une confirmation déjà réussie ne produit plus d'écriture.
+Les transactions réelles restent hors périmètre.
 
-## Écarts restants — prioritaires
+### Livraison et commande
 
-### P1 — Paiement simulé bloqué par le contrat d'idempotence
+UNASSIGNED → ASSIGNED → PICKED_UP → DELIVERING → DELIVERED.
+L'affectation nécessite une commande acceptée ; le retrait et les étapes
+suivantes nécessitent READY. Le backend fournit allowedActions à l'interface.
+DELIVERED termine la commande dans la même transaction.
+Une livraison ne peut pas être terminée via le bouton de retrait client ou
+le bouton de fin de commande du restaurant. Annuler/refuser une commande
+annule aussi sa tâche de livraison.
 
-Client : src/api/commerce.ts, createPaymentIntent, n'envoie pas Idempotency-Key.
-Backend : CommerceController.createIntent porte @Idempotent.
-Conséquence : rejet avant la création de l'intention, même en simulation.
-Prévoir une clé stable par tentative et des tests de répétition/expiration.
+### Administration
 
-### P1 — Livraison et commande non synchronisées
+Permissions distinctes : admin.payment.refund, admin.review.moderate et
+admin.support.write. ADMIN les possède ; SUPPORT reste en lecture seule.
+GET /admin/capabilities pilote l'affichage des actions ; les routes serveur
+contrôlent toujours les permissions. Le remboursement exige une
+réauthentification récente. Les mutations sont tracées dans le journal d'audit.
+Les boutons affichent confirmation, attente et résultat ou erreur.
 
-Restaurant : ServicePanel permet ASSIGNED → DELIVERED directement.
-Backend : CommerceService.changeDelivery ne met à jour que delivery_tasks ;
-OrdersService.confirmPickup n'examine que READY, sans distinguer le service.
-Conséquences : livraison terminée avec commande non terminée, ou confirmation
-de retrait proposée pour une livraison. L'éligibilité à l'avis dépend alors d'un
-statut de commande qui ne reflète pas nécessairement la réception.
-Définir les transitions par mode de service et les appliquer atomiquement.
+### Avis et réponses du restaurant
 
-### P1 — Permissions de lecture utilisées pour des mutations d'administration
+Avis réservé au propriétaire d'une commande COMPLETED, note 1–5,
+un avis par commande et modification possible. Un avis masqué reste masqué.
+GET /orders/:id/review permet au client de récupérer son propre avis.
+Idempotency-Key est envoyé à la création.
+Chaque avis commerçant a son champ de réponse et sa mutation indépendants,
+avec validation, attente, confirmation et erreur visibles.
 
-MerchantOpsController protège remboursement sandbox, masquage d'avis et clôture
-de ticket par ADMIN_ESTABLISHMENT_READ. Les routes et charges utiles du back-office
-existent, mais la séparation lecture / écriture n'est pas assez explicite.
-Définir les droits dédiés, la matrice de rôles et la traçabilité de ces décisions.
+### Réservations
 
-### P2 — Gestion des avis du commerçant incomplète
+Le formulaire propose dates et heures, converties selon le fuseau du restaurant,
+et conserve sa clé d'idempotence. Il s'agit d'une demande, pas d'une garantie
+de table disponible avant validation du restaurant.
 
-ServicePanel réutilise une seule variable reply pour toutes les réponses.
-Plusieurs actions utilisent .then(refresh) sans état d'erreur visible.
-Prévoir une réponse et une mutation par avis, avec confirmation et erreur.
-Photos d'avis, signalement et notation séparée du livreur ne sont pas livrés.
+La confirmation attribue une table configurée dont la capacité est suffisante,
+sans chevauchement de réservation confirmée ou occupée.
+La durée conventionnelle affichée est de deux heures.
+Un verrou sur l'établissement sérialise les allocations concurrentes.
+Sans table adaptée, la confirmation est refusée avec une explication.
+Les réservations historiques confirmées sans table sont traitées prudemment
+comme un conflit sur leur créneau ; elles nécessitent une régularisation.
 
-### P2 — Réservations : gestion de capacité non implémentée
+REQUESTED → CONFIRMED / REJECTED / CANCELLED ;
+CONFIRMED → SEATED / CANCELLED / NO_SHOW ; SEATED → COMPLETED.
+NO_SHOW est interdit avant l'heure prévue.
+La liste opérationnelle présente les demandes, confirmations et clients installés ;
+l'ancien plafond de 80 entrées mélangeant historique et activité est supprimé.
+Une vue historique paginée reste une évolution distincte.
 
-Pas de contrôle de tables libres ni de durée d'occupation dans createReservation.
-L'interface explicite donc qu'il s'agit d'une demande à confirmer.
-La liste commerçant est limitée à 80 entrées triées par date croissante :
-à terme, ajouter filtres actifs/date et pagination pour ne pas masquer les suivantes.
+## Vérifications locales
 
-## Cohérences constatées dans les parties inspectées
+- Backend : 123 tests unitaires réussis, vérification TypeScript et ESLint ciblé réussis.
+- Client mobile : 19 tests réussis ; ESLint ciblé réussi.
+- Restaurant mobile : 8 tests réussis ; ESLint ciblé réussi.
+- Administration : 9 tests réussis ; TypeScript et ESLint ciblé réussis.
+- Les tests de service utilisent des doublures : ils ne valident pas l'exécution
+  du SQL ni une véritable concurrence PostgreSQL.
+- Le contrôle TypeScript mobile complet reste limité par les dépendances locales
+  disponibles (SDK 57 / React Native 0.86) alors que les dépôts restent SDK 54.
+  Des usages préexistants d'absoluteFillObject échouent avec ces types locaux.
+  Aucune montée de SDK n'a été effectuée.
+- Pas de recette native sur téléphone, de publication EAS, ni de vérification
+  du déploiement Railway dans cette passe.
 
-- Web public : découverte, fiche par slug, avis et événements utilisent des routes
-  existantes, avec enveloppe data/meta et paramètres de découverte reconnus.
-- Administration : les consommateurs des listes commandes, avis et tickets
-  utilisent les noms snake_case renvoyés par les services concernés.
-- Les clients utilisent le préfixe /api/v1 et le format d'erreur applicatif.
-- Ces constats ne couvrent pas tous les écrans, rôles ni combinaisons de modules.
+## Déploiement et recette restante
 
-## Vérifications et limites
+Déployer le backend avant les frontends : nouveaux contrats capabilities,
+allowedActions et attribution des tables. Configurer les tables et leurs capacités
+avant de confirmer des réservations.
 
-- Client : 19 tests unitaires réussis, dont les tests de fuseau et dates invalides.
-- 8 assertions directes réussies sur les transitions de réservation.
-- ESLint ciblé client et restaurant : réussi.
-- Typecheck complet local non validé : les dépendances locales disponibles sont
-  SDK 57 / React Native 0.86, alors que les dépôts ciblent SDK 54. Deux usages
-  préexistants d'absoluteFillObject échouent avec ces types locaux.
-- Pas de test HTTP authentifié contre PostgreSQL, ni de recette sur téléphone,
-  ni de validation du déploiement Railway ou d'une publication EAS.
+Tester sur une base dédiée : double confirmation simultanée pour une même table,
+chevauchements et créneaux adjacents, groupes trop grands, arrivée tardive,
+paiement répété ou annulé, parcours complet de livraison, compte SUPPORT et ADMIN,
+session nécessitant une réauthentification et erreurs réseau.
+Puis effectuer la recette sur téléphone avec les dépendances SDK 54.
 
-## Ordre de recette
-
-Déployer le backend avant les nouvelles applications (nouveau GET d'avis).
-Tester réservation connecté/déconnecté, double clic, répétition après perte réseau,
-date passée, Abidjan/Paris, confirmation/refus, annulation concurrente.
-Tester avis avant/après commande terminée, autre utilisateur, modification,
-avis masqué et score hors plage. Vérifier chaque rôle restaurant/admin.
-Terminer la synchronisation livraison/commande avant de considérer les avis
-de livraison comme entièrement conformes au parcours attendu.
+Les photos d'avis, le signalement et une notation séparée du livreur ne sont
+pas implémentés par ce lot. Le web public n'a pas nécessité de changement pour
+les cinq écarts corrigés. Les autres modules ne sont pas certifiés par cet audit.
