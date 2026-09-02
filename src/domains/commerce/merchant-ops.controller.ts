@@ -15,6 +15,7 @@ import {
   InventoryItemDto,
   OpenCashDto,
   ReviewResponseDto,
+  ReservationStatusDto,
   StockMoveDto,
 } from './commerce.dto';
 
@@ -37,7 +38,7 @@ export class MerchantOpsController {
   async reservationStatus(
     @CurrentActor() actor: AuthenticatedActor,
     @Param('id', ParseUUIDPipe) id: string,
-    @Body() body: { status: string },
+    @Body() body: ReservationStatusDto,
   ) {
     return this.commerce.changeReservationStatus(actor, id, body.status);
   }

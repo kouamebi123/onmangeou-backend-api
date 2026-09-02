@@ -284,6 +284,7 @@ export class DiscoveryService {
       name: establishment.name,
       description: establishment.description,
       phoneE164: establishment.phoneE164,
+      timezone: establishment.timezone,
       city: establishment.city,
       district: establishment.district,
       addressLine: establishment.addressLine,

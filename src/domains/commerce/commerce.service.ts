@@ -9,6 +9,7 @@ import { toAmount, toMoneyView } from '../../common/money/money';
 import { EntitlementsService } from '../entitlements/entitlements.service';
 import { MODULE_CODES, type ModuleCode } from '../entitlements/module-codes';
 import { notifyUser } from './notify';
+import { canChangeReservationStatus } from './reservation-rules';
 import type {
   CashMovementDto,
   CreateCreditDto,
@@ -314,7 +315,7 @@ export class CommerceService {
       establishment.id,
     );
     const startsAt = new Date(dto.startsAt);
-    if (Number.isNaN(startsAt.getTime()) || startsAt.getTime() < Date.now() - 60_000) {
+    if (Number.isNaN(startsAt.getTime()) || startsAt.getTime() <= Date.now()) {
       throw validationFailed([
         { field: 'startsAt', code: 'invalid', message: 'La date de réservation est passée' },
       ]);
@@ -324,7 +325,7 @@ export class CommerceService {
       select: { fullName: true, phoneE164: true },
     });
     const id = randomUUID();
-    const publicRef = `RSV-${Math.random().toString(36).slice(2, 8).toUpperCase()}`;
+    const publicRef = `RSV-${randomUUID().slice(0, 8).toUpperCase()}`;
     await this.prisma.$executeRaw`
       INSERT INTO reservations (
         id, public_ref, organization_id, establishment_id, user_id, status, party_size,
@@ -342,7 +343,7 @@ export class CommerceService {
   async listMyReservations(actor: AuthenticatedActor) {
     return this.prisma.$queryRaw`
       SELECT r.id, r.public_ref, r.status, r.party_size, r.starts_at, r.notes,
-             e.name AS establishment_name, e.slug AS establishment_slug
+             e.name AS establishment_name, e.slug AS establishment_slug, e.timezone
       FROM reservations r
       JOIN establishments e ON e.id = r.establishment_id
       WHERE r.user_id = ${actor.userId}::uuid
@@ -363,9 +364,14 @@ export class CommerceService {
         publicDetail: 'Cette réservation ne peut plus être annulée.',
       });
     }
-    await this.prisma.$executeRaw`
-      UPDATE reservations SET status = 'CANCELLED', updated_at = NOW() WHERE id = ${reservationId}::uuid
+    const changed = await this.prisma.$executeRaw`
+      UPDATE reservations SET status = 'CANCELLED', updated_at = NOW()
+      WHERE id = ${reservationId}::uuid AND user_id = ${actor.userId}::uuid
+        AND status IN ('REQUESTED', 'CONFIRMED')
     `;
+    if (!changed) throw new DomainError('CONFLICT', 'Reservation modifiee', {
+      publicDetail: 'Cette réservation a changé. Actualisez la liste.',
+    });
     return this.getReservation(reservationId);
   }
 
@@ -380,7 +386,7 @@ export class CommerceService {
       : Prisma.sql``;
     return this.prisma.$queryRaw`
       SELECT r.id, r.public_ref, r.status, r.party_size, r.starts_at, r.customer_name, r.customer_phone, r.notes,
-             e.name AS establishment_name
+             e.name AS establishment_name, e.timezone
       FROM reservations r
       JOIN establishments e ON e.id = r.establishment_id
       WHERE r.organization_id = ${organizationId}::uuid
@@ -392,8 +398,8 @@ export class CommerceService {
 
   async changeReservationStatus(actor: AuthenticatedActor, reservationId: string, status: string) {
     const organizationId = this.tenant.requireOrganization(actor);
-    const rows = await this.prisma.$queryRaw<Array<{ establishment_id: string }>>`
-      SELECT establishment_id FROM reservations
+    const rows = await this.prisma.$queryRaw<Array<{ establishment_id: string; status: string }>>`
+      SELECT establishment_id, status FROM reservations
       WHERE id = ${reservationId}::uuid AND organization_id = ${organizationId}::uuid
     `;
     if (!rows[0]) {
@@ -401,9 +407,19 @@ export class CommerceService {
     }
     await this.requireModules(actor, [MODULE_CODES.RESERVATIONS_TABLES], rows[0].establishment_id);
     await this.tenant.assertEstablishmentInScope(actor, rows[0].establishment_id);
-    await this.prisma.$executeRaw`
-      UPDATE reservations SET status = ${status}, updated_at = NOW() WHERE id = ${reservationId}::uuid
+    if (!canChangeReservationStatus(rows[0].status, status)) {
+      throw new DomainError('CONFLICT', 'Transition de reservation invalide', {
+        publicDetail: 'Cette action ne correspond plus au statut de la réservation.',
+      });
+    }
+    const changed = await this.prisma.$executeRaw`
+      UPDATE reservations SET status = ${status}, updated_at = NOW()
+      WHERE id = ${reservationId}::uuid AND organization_id = ${organizationId}::uuid
+        AND status = ${rows[0].status}
     `;
+    if (!changed) throw new DomainError('CONFLICT', 'Reservation modifiee', {
+      publicDetail: 'Cette réservation a changé. Actualisez la liste.',
+    });
     return this.getReservation(reservationId);
   }
 
@@ -419,27 +435,35 @@ export class CommerceService {
     }
     if (order.status !== 'COMPLETED') {
       throw new DomainError('CONFLICT', 'Avis sans commande terminee', {
-        publicDetail: 'Un avis public exige une commande récupérée.',
+        publicDetail: 'Vous pouvez noter le restaurant après une commande terminée.',
       });
     }
     const id = randomUUID();
-    try {
-      await this.prisma.$executeRaw`
+    const saved = await this.prisma.$queryRaw<Array<{ id: string }>>`
         INSERT INTO reviews (id, establishment_id, user_id, order_id, score, body, status, created_at)
         VALUES (${id}::uuid, ${order.establishment_id}::uuid, ${actor.userId}::uuid, ${order.id}::uuid,
                 ${dto.score}, ${dto.body?.trim() || null}, 'PUBLISHED', NOW())
-      `;
-    } catch {
-      throw new DomainError('CONFLICT', 'Avis deja depose', {
-        publicDetail: 'Vous avez déjà noté cette commande.',
-      });
-    }
-    return this.getReview(id);
+        ON CONFLICT (order_id) DO UPDATE SET score = EXCLUDED.score, body = EXCLUDED.body
+        WHERE reviews.user_id = EXCLUDED.user_id
+        RETURNING id
+    `;
+    if (!saved[0]) throw notFound('Avis', dto.orderId);
+    return this.getReview(saved[0].id);
+  }
+
+  async myReview(actor: AuthenticatedActor, orderId: string) {
+    const rows = await this.prisma.$queryRaw`
+      SELECT id, score, body, status FROM reviews
+      WHERE order_id = ${orderId}::uuid AND user_id = ${actor.userId}::uuid
+    `;
+    return (rows as object[])[0] ?? null;
   }
 
   async listReviews(establishmentId: string) {
     return this.prisma.$queryRaw`
-      SELECT r.id, r.score, r.body, r.created_at, u.full_name AS author_name, rr.body AS response
+      SELECT r.id, r.score, r.body, r.created_at,
+        EXISTS (SELECT 1 FROM orders o WHERE o.id = r.order_id AND o.customer_user_id = r.user_id AND o.status = 'COMPLETED') AS verified,
+        u.full_name AS author_name, rr.body AS response
       FROM reviews r
       JOIN users u ON u.id = r.user_id
       LEFT JOIN review_responses rr ON rr.review_id = r.id

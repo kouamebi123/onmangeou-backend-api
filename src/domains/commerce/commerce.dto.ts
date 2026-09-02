@@ -68,6 +68,12 @@ export class CreateReservationDto {
   notes?: string;
 }
 
+export class ReservationStatusDto {
+  @ApiProperty({ enum: ['CONFIRMED', 'REJECTED', 'CANCELLED', 'SEATED', 'COMPLETED', 'NO_SHOW'] })
+  @IsEnum(['CONFIRMED', 'REJECTED', 'CANCELLED', 'SEATED', 'COMPLETED', 'NO_SHOW'])
+  status!: string;
+}
+
 export class CreateReviewDto {
   @ApiProperty()
   @IsUUID()

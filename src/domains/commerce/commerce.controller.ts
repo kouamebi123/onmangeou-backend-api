@@ -107,6 +107,11 @@ export class CommerceController {
     return this.commerce.listReviews(establishmentId);
   }
 
+  @Get('orders/:id/review')
+  async myReview(@CurrentActor() actor: AuthenticatedActor, @Param('id', ParseUUIDPipe) id: string) {
+    return this.commerce.myReview(actor, id);
+  }
+
   @Get('restaurants/:id/events')
   @PublicRoute()
   async events(@Param('id', ParseUUIDPipe) establishmentId: string) {
