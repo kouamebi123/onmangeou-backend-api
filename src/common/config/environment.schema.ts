@@ -50,6 +50,14 @@ const toStringList = () =>
  * refuser de demarrer plutot que d'echouer silencieusement en production.
  */
 export class EnvironmentSchema {
+  @toBoolean()
+  @IsBoolean()
+  PUSH_ENABLED = false;
+
+  @IsOptional()
+  @IsString()
+  EXPO_PUSH_ACCESS_TOKEN?: string;
+
   @IsEnum(NodeEnvironment)
   NODE_ENV: NodeEnvironment = NodeEnvironment.Development;
 

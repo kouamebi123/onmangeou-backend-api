@@ -35,6 +35,6 @@ for (const [entry, output] of [
       '@nestjs/websockets': './scripts/empty-optional.js',
       '@nestjs/websockets/socket-module.js': './scripts/empty-optional.js',
     },
-    external: ['pg-native', 'pino', 'pino-http', 'pino-pretty', 'thread-stream', 'swagger-ui-dist'],
+    external: ['sharp', 'pg-native', 'pino', 'pino-http', 'pino-pretty', 'thread-stream', 'swagger-ui-dist'],
   });
 }

@@ -28,6 +28,7 @@ import { PrismaModule } from './infrastructure/prisma/prisma.module';
 import { RedisModule } from './infrastructure/redis/redis.module';
 import { MediaModule } from './infrastructure/media/media.module';
 import { JwtModule } from '@nestjs/jwt';
+import { PushModule } from './infrastructure/notifications/push.module';
 
 /**
  * Monolithe modulaire (specification section 4.1).
@@ -38,6 +39,7 @@ import { JwtModule } from '@nestjs/jwt';
  */
 @Module({
   imports: [
+    PushModule,
     AppConfigModule,
     LoggingModule,
     TimeModule,

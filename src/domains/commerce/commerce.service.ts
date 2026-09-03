@@ -301,16 +301,7 @@ export class CommerceService {
         UPDATE orders SET status = 'PENDING_RESTAURANT'::"OrderStatus", paid_at = NOW(), updated_at = NOW()
         WHERE id = ${orderId}::uuid
       `;
-      const owners = await tx.$queryRaw<Array<{ user_id: string }>>`
-        SELECT om.user_id FROM organization_members om
-        JOIN orders o ON o.organization_id = om.organization_id WHERE o.id = ${orderId}::uuid
-      `;
-      for (const owner of owners) {
-        await tx.$executeRaw`
-          INSERT INTO notifications (id, user_id, title, body, kind, created_at)
-          VALUES (${randomUUID()}::uuid, ${owner.user_id}::uuid, 'Nouvelle commande payée', 'Un ticket attend en cuisine.', 'ORDER', NOW())
-        `;
-      }
+      // The status trigger atomically notifies assigned restaurant members.
       return { id: intentId, status: 'SUCCEEDED', replayed: false };
     });
   }
@@ -581,7 +572,7 @@ export class CommerceService {
 
   async myReview(actor: AuthenticatedActor, orderId: string) {
     const rows = await this.prisma.$queryRaw`
-      SELECT id, score, body, status FROM reviews
+      SELECT id, score, body, status, ARRAY(SELECT p.id::text FROM review_photos p WHERE p.review_id=reviews.id ORDER BY p.created_at,p.id) AS photos FROM reviews
       WHERE order_id = ${orderId}::uuid AND user_id = ${actor.userId}::uuid
     `;
     return (rows as object[])[0] ?? null;
@@ -590,6 +581,7 @@ export class CommerceService {
   async listReviews(establishmentId: string) {
     return this.prisma.$queryRaw`
       SELECT r.id, r.score, r.body, r.created_at,
+        ARRAY(SELECT p.id::text FROM review_photos p WHERE p.review_id=r.id ORDER BY p.created_at,p.id) AS photos,
         EXISTS (SELECT 1 FROM orders o WHERE o.id = r.order_id AND o.customer_user_id = r.user_id AND o.status = 'COMPLETED') AS verified,
         u.full_name AS author_name, rr.body AS response
       FROM reviews r
@@ -1090,7 +1082,8 @@ export class CommerceService {
 
   async adminReviews() {
     return this.prisma.$queryRaw`
-      SELECT r.id, r.score, r.body, r.status, r.created_at, e.name AS establishment_name
+      SELECT r.id, r.score, r.body, r.status, r.created_at, e.name AS establishment_name,
+        ARRAY(SELECT p.id::text FROM review_photos p WHERE p.review_id=r.id ORDER BY p.created_at,p.id) AS photos
       FROM reviews r
       JOIN establishments e ON e.id = r.establishment_id
       ORDER BY r.created_at DESC
@@ -1283,7 +1276,8 @@ export class CommerceService {
 
   private async getReview(id: string) {
     const rows = await this.prisma.$queryRaw`
-      SELECT r.id, r.score, r.body, r.created_at, rr.body AS response
+      SELECT r.id, r.score, r.body, r.created_at, rr.body AS response,
+        ARRAY(SELECT p.id::text FROM review_photos p WHERE p.review_id=r.id ORDER BY p.created_at,p.id) AS photos
       FROM reviews r
       LEFT JOIN review_responses rr ON rr.review_id = r.id
       WHERE r.id = ${id}::uuid
