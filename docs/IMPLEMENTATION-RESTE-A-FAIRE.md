@@ -50,7 +50,9 @@ Vous avez confirmé que seul Expo/EAS est configuré. Les points suivants resten
   chiffrée hors serveur ; réaliser une restauration avec médias réels sur une API isolée.
 - [ ] Soumettre les applications aux boutiques après validation de la recette.
 
-Aucun build EAS payant, aucune soumission et aucun déploiement n'ont été lancés.
+Aucun build EAS payant ni soumission aux boutiques n’ont été lancés.
+Les deux previews Expo Go ont été publiées à la demande du propriétaire (voir ci-dessous).
+Le déploiement effectif du backend et des sites reste à vérifier.
 Les secrets doivent être configurés dans les coffres/services concernés, jamais dans le chat.
 
 ## Limites connues à traiter selon les données existantes
@@ -66,3 +68,14 @@ Les secrets doivent être configurés dans les coffres/services concernés, jama
   certifiée ; aucune facturation publicitaire ni paiement opérateur n'est activé.
 
 Procédure détaillée : [exploitation et recette](OPERATIONS.md).
+
+## Publications du 9 septembre 2026
+
+Les cinq dépôts ont été poussés sur GitHub, branche `main`.
+EAS Update a confirmé les publications Android et iOS sur `preview`,
+runtime `exposdk:54.0.0`, pour Expo Go :
+
+- Client : commit `d713d9f`, groupe `97abee6d-bcc0-4c54-b250-1d11cd6bef76`.
+- Restaurant : commit `1a4c653`, groupe `a04878ed-ad35-4bbe-acdf-a9264df0817c`.
+
+Ces publications ne remplacent pas les builds natifs signés ni la recette sur appareil.
