@@ -110,6 +110,7 @@ export class MerchantOpsController {
   }
 
   @Post('merchant/expenses')
+  @Idempotent({ scope: 'expenses.create', optional: true })
   @RequirePermissions(PERMISSIONS.EXPENSES_CREATE)
   async expense(@CurrentActor() actor: AuthenticatedActor, @Body() dto: CreateExpenseDto) {
     return this.commerce.createExpense(actor, dto);

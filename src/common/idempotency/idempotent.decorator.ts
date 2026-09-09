@@ -9,6 +9,9 @@ export interface IdempotentOptions {
    */
   scope: string;
 
+  /** Compatibility for endpoints that historically accepted requests without a key. */
+  optional?: boolean;
+
   /** Duree de conservation de la reponse rejouee. */
   retentionSeconds?: number;
 }

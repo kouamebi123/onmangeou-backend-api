@@ -71,6 +71,7 @@ export const PLATFORM_PERMISSIONS = {
   ADMIN_BILLING_WRITE: 'admin.billing.write',
   ADMIN_PAYMENT_REFUND: 'admin.payment.refund',
   ADMIN_REVIEW_MODERATE: 'admin.review.moderate',
+  ADMIN_AD_MODERATE: 'admin.ad.moderate',
   ADMIN_SUPPORT_WRITE: 'admin.support.write',
 } as const;
 

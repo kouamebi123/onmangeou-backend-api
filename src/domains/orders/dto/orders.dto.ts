@@ -12,6 +12,7 @@ import {
   Max,
   MaxLength,
   Min,
+  Matches,
   ValidateNested,
 } from 'class-validator';
 
@@ -29,6 +30,12 @@ export class CreateOrderItemDto {
 }
 
 export class CreateOrderDto {
+  @ApiPropertyOptional({ description: 'Total FCFA accepté sur le terminal avant synchronisation.' })
+  @IsOptional()
+  @IsString()
+  @Matches(/^\d{1,15}$/)
+  expectedTotalAmount?: string;
+
   @ApiPropertyOptional({ maxLength: 40 })
   @IsOptional()
   @IsString()

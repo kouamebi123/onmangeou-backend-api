@@ -38,6 +38,16 @@ export class MediaController {
     return new StreamableFile(file.bytes);
   }
 
+  @Get(':key/thumbnail')
+  @PublicRoute()
+  @Header('Cache-Control', 'public, max-age=31536000, immutable')
+  async thumbnail(@Param('key') key: string, @Res({ passthrough: true }) response: Response) {
+    const file = await this.media.thumbnail(key);
+    response.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+    response.type(file.contentType);
+    return new StreamableFile(file.bytes);
+  }
+
   @Post('avatar')
   @UseInterceptors(imageInterceptor)
   async avatar(@CurrentActor() actor: AuthenticatedActor, @UploadedFile() file: UploadedImage) {

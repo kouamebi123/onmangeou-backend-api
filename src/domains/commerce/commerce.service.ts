@@ -544,9 +544,16 @@ export class CommerceService {
 
   async createReview(actor: AuthenticatedActor, dto: CreateReviewDto) {
     const orders = await this.prisma.$queryRaw<
-      Array<{ id: string; establishment_id: string; customer_user_id: string; status: string }>
+      Array<{
+        id: string;
+        establishment_id: string;
+        customer_user_id: string;
+        status: string;
+        service: string;
+        delivered: boolean;
+      }>
     >`
-      SELECT id, establishment_id, customer_user_id, status FROM orders WHERE id = ${dto.orderId}::uuid
+      SELECT id, establishment_id, customer_user_id, status, service, EXISTS(SELECT 1 FROM delivery_tasks WHERE order_id=orders.id AND status='DELIVERED') AS delivered FROM orders WHERE id = ${dto.orderId}::uuid
     `;
     const order = orders[0];
     if (!order || order.customer_user_id !== actor.userId) {
@@ -557,12 +564,17 @@ export class CommerceService {
         publicDetail: 'Vous pouvez noter le restaurant après une commande terminée.',
       });
     }
+    if (dto.deliveryScore !== undefined && (order.service !== 'DELIVERY' || !order.delivered)) {
+      throw new DomainError('VALIDATION_FAILED', 'Note de livraison sans livraison terminée', {
+        publicDetail: 'La note du livreur est réservée aux commandes livrées.',
+      });
+    }
     const id = randomUUID();
     const saved = await this.prisma.$queryRaw<Array<{ id: string }>>`
-        INSERT INTO reviews (id, establishment_id, user_id, order_id, score, body, status, created_at)
+        INSERT INTO reviews (id, establishment_id, user_id, order_id, score, delivery_score, body, status, created_at)
         VALUES (${id}::uuid, ${order.establishment_id}::uuid, ${actor.userId}::uuid, ${order.id}::uuid,
-                ${dto.score}, ${dto.body?.trim() || null}, 'PUBLISHED', NOW())
-        ON CONFLICT (order_id) DO UPDATE SET score = EXCLUDED.score, body = EXCLUDED.body
+                ${dto.score}, ${dto.deliveryScore ?? null}, ${dto.body?.trim() || null}, 'PUBLISHED', NOW())
+        ON CONFLICT (order_id) DO UPDATE SET score = EXCLUDED.score, delivery_score = EXCLUDED.delivery_score, body = EXCLUDED.body
         WHERE reviews.user_id = EXCLUDED.user_id
         RETURNING id
     `;
@@ -572,7 +584,7 @@ export class CommerceService {
 
   async myReview(actor: AuthenticatedActor, orderId: string) {
     const rows = await this.prisma.$queryRaw`
-      SELECT id, score, body, status, ARRAY(SELECT p.id::text FROM review_photos p WHERE p.review_id=reviews.id ORDER BY p.created_at,p.id) AS photos FROM reviews
+      SELECT id, score, delivery_score AS "deliveryScore", body, status, ARRAY(SELECT p.id::text FROM review_photos p WHERE p.review_id=reviews.id ORDER BY p.created_at,p.id) AS photos FROM reviews
       WHERE order_id = ${orderId}::uuid AND user_id = ${actor.userId}::uuid
     `;
     return (rows as object[])[0] ?? null;

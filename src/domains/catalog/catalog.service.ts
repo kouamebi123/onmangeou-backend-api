@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { DomainError } from '../../common/errors/domain.error';
+import { DomainError, validationFailed } from '../../common/errors/domain.error';
 import { Clock } from '../../common/time/clock';
 import { toAmount, toMoneyView, type MoneyView } from '../../common/money/money';
 import type { AuthenticatedActor } from '../../common/auth/authenticated-actor';
@@ -278,20 +278,29 @@ export class CatalogService {
   ): Promise<{ applied: boolean; status: string }> {
     const product = await this.loadProductInScope(actor, productId);
 
-    const current = await this.prisma.productAvailability.findUnique({
-      where: { productId_establishmentId: { productId, establishmentId: product.establishmentId } },
-      select: { status: true, changedAt: true },
-    });
-
     const changedAt = parseOptionalDate(dto.clientChangedAt) ?? this.clock.now();
-
-    if (current && changedAt < current.changedAt) {
-      return { applied: false, status: current.status };
+    if (changedAt.getTime() > this.clock.now().getTime() + 5 * 60_000) {
+      throw validationFailed([
+        {
+          field: 'clientChangedAt',
+          code: 'FUTURE',
+          message: 'Vérifiez la date et l’heure de votre appareil.',
+        },
+      ]);
     }
-
     const unavailableUntil = parseOptionalDate(dto.unavailableUntil);
-
-    await this.prisma.$transaction(async (tx) => {
+    return this.prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM products WHERE id=${productId}::uuid FOR UPDATE`;
+      const current = await tx.productAvailability.findUnique({
+        where: { productId_establishmentId: { productId, establishmentId: product.establishmentId } },
+        select: { status: true, changedAt: true },
+      });
+      if (current && changedAt <= current.changedAt) {
+        return {
+          applied: changedAt.getTime() === current.changedAt.getTime() && dto.status === current.status,
+          status: current.status,
+        };
+      }
       await tx.productAvailability.upsert({
         where: { productId_establishmentId: { productId, establishmentId: product.establishmentId } },
         create: {
@@ -336,9 +345,8 @@ export class CatalogService {
         },
         tx,
       );
+      return { applied: true, status: dto.status };
     });
-
-    return { applied: true, status: dto.status };
   }
 
   async setProductStatus(

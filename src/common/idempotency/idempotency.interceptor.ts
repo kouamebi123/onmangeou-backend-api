@@ -53,6 +53,8 @@ export class IdempotencyInterceptor implements NestInterceptor {
     const request = context.switchToHttp().getRequest<AppRequest>();
     const key = request.header(IDEMPOTENCY_KEY_HEADER);
 
+    if ((!key || key.trim().length === 0) && options.optional) return next.handle();
+
     if (!key || key.trim().length === 0) {
       return throwError(
         () =>
@@ -143,8 +145,8 @@ export class IdempotencyInterceptor implements NestInterceptor {
     if (existing.status === 'FAILED') {
       // Une tentative echouee est rejouable : la ligne est reinitialisee pour
       // permettre une nouvelle execution sous la meme cle.
-      await this.prisma.idempotencyKey.update({
-        where: { id: existing.id },
+      const claimed = await this.prisma.idempotencyKey.updateMany({
+        where: { id: existing.id, status: 'FAILED' },
         data: {
           status: 'IN_PROGRESS',
           lockedAt: now,
@@ -153,6 +155,8 @@ export class IdempotencyInterceptor implements NestInterceptor {
         },
       });
 
+      if (claimed.count !== 1)
+        throw new DomainError('IDEMPOTENCY_REQUEST_IN_PROGRESS', 'Reprise déjà en cours');
       return { kind: 'reserved', id: existing.id };
     }
 

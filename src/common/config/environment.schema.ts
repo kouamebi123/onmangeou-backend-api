@@ -145,6 +145,16 @@ export class EnvironmentSchema {
   @IsNotEmpty()
   MEDIA_STORAGE_DRIVER = 'local';
 
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  MEDIA_USER_QUOTA_BYTES = 20 * 1024 * 1024;
+
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  MEDIA_ESTABLISHMENT_QUOTA_BYTES = 200 * 1024 * 1024;
+
   @IsString()
   @IsNotEmpty()
   MEDIA_LOCAL_ROOT = '/data/uploads';

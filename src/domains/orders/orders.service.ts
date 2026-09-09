@@ -245,6 +245,12 @@ export class OrdersService {
       const price = await priceCoupon(tx, establishment.id, subtotalAmount, dto.couponCode, () =>
         this.clock.now(),
       );
+      if (dto.expectedTotalAmount !== undefined && BigInt(dto.expectedTotalAmount) !== price.total) {
+        throw new DomainError('CONFLICT', 'Le prix a changé pendant la déconnexion', {
+          publicDetail:
+            'Le prix de cette commande a changé. Consultez le catalogue et saisissez une nouvelle commande avec le montant actualisé.',
+        });
+      }
       const chargedMethod = price.total === 0n ? 'CASH' : paymentMethod;
       const initialStatus = chargedMethod === 'CASH' ? 'PENDING_RESTAURANT' : 'PENDING_PAYMENT';
       await tx.$executeRaw`

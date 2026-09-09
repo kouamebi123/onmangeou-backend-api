@@ -93,6 +93,14 @@ export class CreateTableDto {
 }
 
 export class CreateReviewDto {
+  @ApiPropertyOptional({ minimum: 1, maximum: 5 })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(5)
+  deliveryScore?: number;
+
   @ApiProperty()
   @IsUUID()
   orderId!: string;
