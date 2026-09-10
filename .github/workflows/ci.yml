@@ -46,6 +46,11 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm prisma generate
       - run: pnpm prisma migrate deploy
+      - name: Show exact Prettier changes
+        run: |
+          cp src/domains/entitlements/entitlements.service.ts /tmp/entitlements.before.ts
+          pnpm exec prettier --write src/domains/entitlements/entitlements.service.ts
+          diff -u /tmp/entitlements.before.ts src/domains/entitlements/entitlements.service.ts || true
       - run: pnpm format:check
       - run: pnpm lint
       - run: pnpm typecheck
