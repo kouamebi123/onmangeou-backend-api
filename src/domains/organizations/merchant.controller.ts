@@ -189,12 +189,12 @@ export class MerchantController {
   @Get('module-catalog')
   @PublicRoute()
   @ApiOperation({
-    summary: 'Consulter le bareme des modules',
+    summary: 'Consulter le bareme des modules disponibles',
     description:
-      'Prix publies depuis le back-office. Le client affiche ces montants tels quels, sans tarif code en dur.',
+      'Seules les fonctionnalites activees globalement par l’administrateur sont exposees au commerçant.',
   })
   async moduleCatalog() {
-    return this.entitlements.catalog();
+    return this.entitlements.publicCatalog();
   }
 
   @Get('entitlements')
@@ -220,7 +220,7 @@ export class MerchantController {
         enabledModules: [],
         modules: [],
         monthlyQuote: { amount: '0', currency: 'XOF', formatted: '0\u202fFCFA' },
-        catalog: await this.entitlements.catalog(),
+        catalog: await this.entitlements.publicCatalog(),
       };
     }
 
@@ -229,7 +229,7 @@ export class MerchantController {
 
   @Put('modules')
   @RequirePermissions(PERMISSIONS.ORGANIZATION_WRITE)
-  @ApiOperation({ summary: 'Activer ou desactiver les modules de mon etablissement' })
+  @ApiOperation({ summary: 'Activer ou desactiver les modules autorises de mon etablissement' })
   async setModules(
     @CurrentActor() actor: AuthenticatedActor,
     @Body() dto: SetMerchantModulesDto,
