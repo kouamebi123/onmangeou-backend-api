@@ -35,6 +35,9 @@ for (const [entry, output] of [
       '@nestjs/websockets': './scripts/empty-optional.js',
       '@nestjs/websockets/socket-module.js': './scripts/empty-optional.js',
     },
-    external: ['sharp', 'pg-native', 'pino', 'pino-http', 'pino-pretty', 'thread-stream', 'swagger-ui-dist'],
+    // Keep native/streaming dependencies external, but bundle Swagger's UI assets.
+    // swagger-ui-dist was previously externalized even though it is not a direct
+    // runtime dependency of this package, which made /docs fail in the Railway image.
+    external: ['sharp', 'pg-native', 'pino', 'pino-http', 'pino-pretty', 'thread-stream'],
   });
 }
