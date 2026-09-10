@@ -5,7 +5,12 @@ import { Clock } from '../../common/time/clock';
 import { PrismaService } from '../../infrastructure/prisma/prisma.service';
 import { AuditService, AUDIT_ACTIONS } from '../audit/audit.service';
 import { toAmount, toMoneyView, type MoneyView } from '../../common/money/money';
-import { ALL_MODULE_CODES, MODULE_CODES, MODULE_LABELS, type ModuleCode } from './module-codes';
+import {
+  ALL_MODULE_CODES,
+  MODULE_CODES,
+  MODULE_LABELS,
+  type ModuleCode,
+} from './module-codes';
 import { quoteMonthlyAmount, type ModuleCatalogView } from './module-pricing';
 
 export interface EntitlementsView {
@@ -30,13 +35,14 @@ export type EntitlementSource = 'plan' | 'override' | 'none';
  * Reference : specification section 30.
  *
  * Ordre de resolution, du plus general au plus specifique :
- *   1. modules du plan de l'abonnement actif ;
- *   2. override par organisation ;
- *   3. override par etablissement.
+ *   1. interrupteur global de la plateforme ;
+ *   2. modules du plan de l'abonnement actif ;
+ *   3. override par organisation ;
+ *   4. override par etablissement.
  *
- * Un abonnement suspendu ou annule conserve les donnees mais bloque les
- * nouvelles operations : seule la vitrine de base reste active, pour que le
- * restaurant ne disparaisse pas brutalement du public le temps de regulariser.
+ * Un module coupe par l'administrateur est inactif partout, quel que soit le
+ * plan ou les reglages du restaurant. Le backend reste l'autorite afin qu'un
+ * ancien client ne puisse pas contourner ce reglage.
  */
 @Injectable()
 export class EntitlementsService {
@@ -64,11 +70,8 @@ export class EntitlementsService {
       where: {
         organizationId,
         effectiveFrom: { lte: now },
-        // Une periode ouverte (`effectiveUntil` nul) reste active indefiniment.
         AND: [
           { OR: [{ effectiveUntil: null }, { effectiveUntil: { gt: now } }] },
-          // Les overrides d'organisation (establishmentId nul) s'appliquent a
-          // tous les sites ; ceux d'un site precis viennent s'y superposer.
           establishmentId === undefined
             ? { establishmentId: null }
             : { OR: [{ establishmentId: null }, { establishmentId }] },
@@ -78,14 +81,17 @@ export class EntitlementsService {
       orderBy: { effectiveFrom: 'asc' },
     });
 
-    const planModules = new Set<string>(subscription?.plan.modules.map((entry) => entry.moduleCode) ?? []);
-
-    const subscriptionUsable = subscription !== null && this.isSubscriptionUsable(subscription.status);
-
+    const fullCatalog = await this.catalog();
+    const platformEnabled = new Set(
+      fullCatalog.modules.filter((entry) => entry.enabled).map((entry) => entry.code),
+    );
+    const planModules = new Set<string>(
+      subscription?.plan.modules.map((entry) => entry.moduleCode) ?? [],
+    );
+    const subscriptionUsable =
+      subscription !== null && this.isSubscriptionUsable(subscription.status);
     const overrideByModule = new Map<string, boolean>();
 
-    // Les overrides d'organisation sont appliques avant ceux d'etablissement, de
-    // sorte qu'un reglage par site prime sur le reglage global.
     for (const override of overrides.filter((entry) => entry.establishmentId === null)) {
       overrideByModule.set(override.moduleCode, override.enabled);
     }
@@ -94,8 +100,10 @@ export class EntitlementsService {
     }
 
     const modules = ALL_MODULE_CODES.map((code) => {
-      // La vitrine reste toujours visible : un restaurant ne doit pas disparaitre
-      // du catalogue ni perdre l'edition de sa fiche (specification section 30).
+      if (!platformEnabled.has(code)) {
+        return { code, label: MODULE_LABELS[code], enabled: false, source: 'none' as const };
+      }
+
       if (code === MODULE_CODES.STOREFRONT_BASIC) {
         const override = overrideByModule.get(code);
         return {
@@ -112,13 +120,16 @@ export class EntitlementsService {
       }
 
       const override = overrideByModule.get(code);
-
       if (override !== undefined) {
-        return { code, label: MODULE_LABELS[code], enabled: override, source: 'override' as const };
+        return {
+          code,
+          label: MODULE_LABELS[code],
+          enabled: override,
+          source: 'override' as const,
+        };
       }
 
       const fromPlan = subscriptionUsable && planModules.has(code);
-
       return {
         code,
         label: MODULE_LABELS[code],
@@ -127,10 +138,13 @@ export class EntitlementsService {
       };
     });
 
-    const catalog = await this.catalog();
     const prices = Object.fromEntries(
-      catalog.modules.map((item) => [item.code, toAmount(item.monthlyPrice.amount, item.code)]),
+      fullCatalog.modules.map((item) => [
+        item.code,
+        toAmount(item.monthlyPrice.amount, item.code),
+      ]),
     );
+    const catalog = this.onlyPlatformEnabled(fullCatalog);
 
     return {
       organizationId,
@@ -152,7 +166,10 @@ export class EntitlementsService {
   }
 
   async catalog(): Promise<ModuleCatalogView> {
-    const [rows, billing] = await Promise.all([this.loadCatalogRows(), this.loadBillingSettings()]);
+    const [rows, billing] = await Promise.all([
+      this.loadCatalogRows(),
+      this.loadBillingSettings(),
+    ]);
     return {
       currency: billing.currency,
       published: billing.published,
@@ -161,16 +178,27 @@ export class EntitlementsService {
         code: row.module_code as ModuleCode,
         label: row.label,
         included: row.included,
+        enabled: row.enabled,
         monthlyPrice: toMoneyView(toAmount(row.monthly_price_amount, row.module_code)),
       })),
     };
+  }
+
+  async publicCatalog(): Promise<ModuleCatalogView> {
+    return this.onlyPlatformEnabled(await this.catalog());
   }
 
   async setPlatformPrices(
     actor: AuthenticatedActor,
     payload: {
       notice?: string;
-      modules: Array<{ code: string; monthlyPriceAmount: number; label?: string; included?: boolean }>;
+      modules: Array<{
+        code: string;
+        monthlyPriceAmount: number;
+        label?: string;
+        included?: boolean;
+        enabled?: boolean;
+      }>;
     },
     context: { requestId: string },
   ): Promise<ModuleCatalogView> {
@@ -208,12 +236,14 @@ export class EntitlementsService {
         const amount = BigInt(entry.monthlyPriceAmount);
         const label = entry.label?.trim();
         const included = entry.included ?? null;
+        const enabled = entry.enabled ?? null;
         await tx.$executeRaw`
           UPDATE module_prices
           SET
             monthly_price_amount = ${amount},
             label = COALESCE(${label ?? null}, label),
             included = COALESCE(${included}, included),
+            enabled = COALESCE(${enabled}, enabled),
             updated_by_user_id = ${actor.userId}::uuid,
             updated_at = NOW()
           WHERE module_code = ${entry.code}
@@ -238,7 +268,7 @@ export class EntitlementsService {
           actorUserId: actor.userId,
           before,
           after: payload,
-          reason: 'Publication du bareme d’abonnement',
+          reason: 'Publication du bareme et des fonctionnalites disponibles',
           requestId: context.requestId,
         },
         tx,
@@ -249,17 +279,29 @@ export class EntitlementsService {
   }
 
   private async loadCatalogRows(): Promise<
-    Array<{ module_code: string; label: string; included: boolean; monthly_price_amount: unknown }>
+    Array<{
+      module_code: string;
+      label: string;
+      included: boolean;
+      enabled: boolean;
+      monthly_price_amount: unknown;
+    }>
   > {
     return this.prisma.$queryRaw`
-      SELECT module_code, label, included, monthly_price_amount
+      SELECT module_code, label, included, enabled, monthly_price_amount
       FROM module_prices
       ORDER BY sort_order ASC, module_code ASC
     `;
   }
 
-  private async loadBillingSettings(): Promise<{ currency: string; published: boolean; notice: string }> {
-    const rows = await this.prisma.$queryRaw<Array<{ currency: string; published: boolean; notice: string }>>`
+  private async loadBillingSettings(): Promise<{
+    currency: string;
+    published: boolean;
+    notice: string;
+  }> {
+    const rows = await this.prisma.$queryRaw<
+      Array<{ currency: string; published: boolean; notice: string }>
+    >`
       SELECT currency, published, notice FROM platform_billing WHERE id = 1 LIMIT 1
     `;
     const row = rows[0];
@@ -284,15 +326,33 @@ export class EntitlementsService {
     }
 
     const known = new Set<string>(ALL_MODULE_CODES);
+    const catalog = await this.catalog();
+    const platformEnabled = new Set(
+      catalog.modules.filter((entry) => entry.enabled).map((entry) => entry.code),
+    );
+
     for (const entry of modules) {
       if (!known.has(entry.code)) {
         throw validationFailed([
           { field: 'modules', code: 'invalid', message: `Module inconnu : ${entry.code}` },
         ]);
       }
+      if (entry.enabled && !platformEnabled.has(entry.code as ModuleCode)) {
+        throw validationFailed([
+          {
+            field: 'modules',
+            code: 'platform_disabled',
+            message: `La fonctionnalité ${entry.code} est désactivée par l’administrateur.`,
+          },
+        ]);
+      }
       if (entry.code === MODULE_CODES.STOREFRONT_BASIC && !entry.enabled) {
         throw validationFailed([
-          { field: 'modules', code: 'required', message: 'La vitrine de base ne peut pas être désactivée.' },
+          {
+            field: 'modules',
+            code: 'required',
+            message: 'La vitrine de base ne peut pas être désactivée par le restaurant.',
+          },
         ]);
       }
     }
@@ -352,29 +412,30 @@ export class EntitlementsService {
     return view.enabledModules.includes(moduleCode);
   }
 
-  /**
-   * Refuse l'operation si le module n'est pas actif.
-   *
-   * Un module desactive ne doit produire aucun ecran ni blocage cote client
-   * (specification section 14 et scenario obligatoire 6), mais le serveur reste
-   * l'autorite : un client obsolete ne doit pas pouvoir contourner l'offre.
-   */
   async assertModuleEnabled(
     organizationId: string,
     moduleCode: ModuleCode,
     establishmentId?: string,
   ): Promise<void> {
     if (!(await this.isModuleEnabled(organizationId, moduleCode, establishmentId))) {
-      throw new DomainError('MODULE_NOT_ENABLED', `Module ${moduleCode} inactif pour ${organizationId}`, {
-        publicDetail: `La fonction  ${MODULE_LABELS[moduleCode]}  n'est pas activee pour votre etablissement.`,
-      });
+      throw new DomainError(
+        'MODULE_NOT_ENABLED',
+        `Module ${moduleCode} inactif pour ${organizationId}`,
+        {
+          publicDetail: `La fonctionnalité « ${MODULE_LABELS[moduleCode]} » n’est pas active pour votre établissement.`,
+        },
+      );
     }
   }
 
+  private onlyPlatformEnabled(catalog: ModuleCatalogView): ModuleCatalogView {
+    return {
+      ...catalog,
+      modules: catalog.modules.filter((entry) => entry.enabled),
+    };
+  }
+
   private isSubscriptionUsable(status: string): boolean {
-    // PAST_DUE reste utilisable : couper l'exploitation d'un restaurant des le
-    // premier retard de paiement serait disproportionne. La suspension effective
-    // est une decision de la plateforme, materialisee par le statut SUSPENDED.
     return status === 'TRIALING' || status === 'ACTIVE' || status === 'PAST_DUE';
   }
 }
