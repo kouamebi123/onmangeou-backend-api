@@ -5,7 +5,12 @@ import { Clock } from '../../common/time/clock';
 import { PrismaService } from '../../infrastructure/prisma/prisma.service';
 import { AuditService, AUDIT_ACTIONS } from '../audit/audit.service';
 import { toAmount, toMoneyView, type MoneyView } from '../../common/money/money';
-import { ALL_MODULE_CODES, MODULE_CODES, MODULE_LABELS, type ModuleCode } from './module-codes';
+import {
+  ALL_MODULE_CODES,
+  MODULE_CODES,
+  MODULE_LABELS,
+  type ModuleCode,
+} from './module-codes';
 import { quoteMonthlyAmount, type ModuleCatalogView } from './module-pricing';
 
 export interface EntitlementsView {
@@ -80,8 +85,11 @@ export class EntitlementsService {
     const platformEnabled = new Set(
       fullCatalog.modules.filter((entry) => entry.enabled).map((entry) => entry.code),
     );
-    const planModules = new Set<string>(subscription?.plan.modules.map((entry) => entry.moduleCode) ?? []);
-    const subscriptionUsable = subscription !== null && this.isSubscriptionUsable(subscription.status);
+    const planModules = new Set<string>(
+      subscription?.plan.modules.map((entry) => entry.moduleCode) ?? [],
+    );
+    const subscriptionUsable =
+      subscription !== null && this.isSubscriptionUsable(subscription.status);
     const overrideByModule = new Map<string, boolean>();
 
     for (const override of overrides.filter((entry) => entry.establishmentId === null)) {
@@ -113,7 +121,12 @@ export class EntitlementsService {
 
       const override = overrideByModule.get(code);
       if (override !== undefined) {
-        return { code, label: MODULE_LABELS[code], enabled: override, source: 'override' as const };
+        return {
+          code,
+          label: MODULE_LABELS[code],
+          enabled: override,
+          source: 'override' as const,
+        };
       }
 
       const fromPlan = subscriptionUsable && planModules.has(code);
@@ -126,7 +139,10 @@ export class EntitlementsService {
     });
 
     const prices = Object.fromEntries(
-      fullCatalog.modules.map((item) => [item.code, toAmount(item.monthlyPrice.amount, item.code)]),
+      fullCatalog.modules.map((item) => [
+        item.code,
+        toAmount(item.monthlyPrice.amount, item.code),
+      ]),
     );
     const catalog = this.onlyPlatformEnabled(fullCatalog);
 
@@ -150,7 +166,10 @@ export class EntitlementsService {
   }
 
   async catalog(): Promise<ModuleCatalogView> {
-    const [rows, billing] = await Promise.all([this.loadCatalogRows(), this.loadBillingSettings()]);
+    const [rows, billing] = await Promise.all([
+      this.loadCatalogRows(),
+      this.loadBillingSettings(),
+    ]);
     return {
       currency: billing.currency,
       published: billing.published,
@@ -275,8 +294,14 @@ export class EntitlementsService {
     `;
   }
 
-  private async loadBillingSettings(): Promise<{ currency: string; published: boolean; notice: string }> {
-    const rows = await this.prisma.$queryRaw<Array<{ currency: string; published: boolean; notice: string }>>`
+  private async loadBillingSettings(): Promise<{
+    currency: string;
+    published: boolean;
+    notice: string;
+  }> {
+    const rows = await this.prisma.$queryRaw<
+      Array<{ currency: string; published: boolean; notice: string }>
+    >`
       SELECT currency, published, notice FROM platform_billing WHERE id = 1 LIMIT 1
     `;
     const row = rows[0];
@@ -323,7 +348,11 @@ export class EntitlementsService {
       }
       if (entry.code === MODULE_CODES.STOREFRONT_BASIC && !entry.enabled) {
         throw validationFailed([
-          { field: 'modules', code: 'required', message: 'La vitrine de base ne peut pas être désactivée par le restaurant.' },
+          {
+            field: 'modules',
+            code: 'required',
+            message: 'La vitrine de base ne peut pas être désactivée par le restaurant.',
+          },
         ]);
       }
     }
@@ -389,9 +418,13 @@ export class EntitlementsService {
     establishmentId?: string,
   ): Promise<void> {
     if (!(await this.isModuleEnabled(organizationId, moduleCode, establishmentId))) {
-      throw new DomainError('MODULE_NOT_ENABLED', `Module ${moduleCode} inactif pour ${organizationId}`, {
-        publicDetail: `La fonctionnalité « ${MODULE_LABELS[moduleCode]} » n’est pas active pour votre établissement.`,
-      });
+      throw new DomainError(
+        'MODULE_NOT_ENABLED',
+        `Module ${moduleCode} inactif pour ${organizationId}`,
+        {
+          publicDetail: `La fonctionnalité « ${MODULE_LABELS[moduleCode]} » n’est pas active pour votre établissement.`,
+        },
+      );
     }
   }
 
