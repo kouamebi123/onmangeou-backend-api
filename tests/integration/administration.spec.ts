@@ -135,4 +135,88 @@ describe('administration plateforme', () => {
     );
     expect(payload).not.toHaveProperty('sandbox');
   });
+
+  it('un module coupe par l administrateur disparait du catalogue et des droits des restaurants', async () => {
+    const adminUser = await authenticate(context);
+    await context.prisma.platformStaff.create({
+      data: { userId: adminUser.userId, role: 'ADMIN' },
+    });
+    const merchant = await createMerchant(context, { name: 'Chez Module' });
+    const setModules = (enabled: boolean) =>
+      context
+        .http()
+        .put('/api/v1/merchant/modules')
+        .set('Authorization', `Bearer ${merchant.accessToken}`)
+        .send({ modules: [{ code: 'reservations.tables', enabled }] });
+    const publish = (enabled: boolean) =>
+      context
+        .http()
+        .put('/api/v1/admin/module-prices')
+        .set('Authorization', `Bearer ${adminUser.accessToken}`)
+        .send({ modules: [{ code: 'reservations.tables', monthlyPriceAmount: 3000, enabled }] })
+        .expect(200);
+
+    await setModules(true).expect(200);
+
+    try {
+      const published = payloadOf<{ modules: Array<{ code: string; enabled: boolean }> }>(
+        (await publish(false)).body,
+      );
+      // Le back-office conserve la ligne pour pouvoir la reactiver.
+      expect(published.modules.find((item) => item.code === 'reservations.tables')?.enabled).toBe(false);
+
+      const catalog = payloadOf<{ modules: Array<{ code: string }> }>(
+        (await context.http().get('/api/v1/merchant/module-catalog').expect(200)).body,
+      );
+      expect(catalog.modules.map((item) => item.code)).not.toContain('reservations.tables');
+      expect(catalog.modules.map((item) => item.code)).toContain('storefront.basic');
+
+      const entitlements = payloadOf<{
+        enabledModules: string[];
+        catalog: { modules: Array<{ code: string }> };
+      }>(
+        (
+          await context
+            .http()
+            .get('/api/v1/merchant/entitlements')
+            .set('Authorization', `Bearer ${merchant.accessToken}`)
+            .expect(200)
+        ).body,
+      );
+      // Le reglage du restaurant ne contourne pas l'interrupteur de la plateforme.
+      expect(entitlements.enabledModules).not.toContain('reservations.tables');
+      expect(entitlements.catalog.modules.map((item) => item.code)).not.toContain('reservations.tables');
+
+      const refused = await setModules(true).expect(400);
+      expect(JSON.stringify(refused.body)).toContain('platform_disabled');
+
+      await publish(true);
+      const restored = payloadOf<{ enabledModules: string[] }>((await setModules(true).expect(200)).body);
+      expect(restored.enabledModules).toContain('reservations.tables');
+    } finally {
+      // `module_prices` est une table de reference conservee entre les tests.
+      await context.prisma.$executeRaw`
+        UPDATE module_prices SET enabled = TRUE, monthly_price_amount = 0
+        WHERE module_code = 'reservations.tables'
+      `;
+    }
+  });
+
+  it('une publication sans interrupteur conserve la disponibilite existante', async () => {
+    const adminUser = await authenticate(context);
+    await context.prisma.platformStaff.create({
+      data: { userId: adminUser.userId, role: 'ADMIN' },
+    });
+
+    const response = await context
+      .http()
+      .put('/api/v1/admin/module-prices')
+      .set('Authorization', `Bearer ${adminUser.accessToken}`)
+      .send({ modules: [{ code: 'orders.manual', monthlyPriceAmount: 0 }] })
+      .expect(200);
+
+    const payload = payloadOf<{ modules: Array<{ code: string; enabled: boolean }> }>(response.body);
+    expect(payload.modules.length).toBeGreaterThan(1);
+    expect(payload.modules.every((item) => item.enabled)).toBe(true);
+  });
 });
