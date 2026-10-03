@@ -5,6 +5,7 @@ export interface ModuleCatalogItem {
   code: ModuleCode;
   label: string;
   included: boolean;
+  enabled: boolean;
   monthlyPrice: MoneyView;
 }
 

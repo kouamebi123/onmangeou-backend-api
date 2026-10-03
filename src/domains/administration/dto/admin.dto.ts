@@ -81,6 +81,11 @@ export class AdminModulePriceDto {
   @IsOptional()
   @IsBoolean()
   included?: boolean;
+
+  @ApiPropertyOptional({ description: 'Disponibilite globale du module pour tous les commerçants.' })
+  @IsOptional()
+  @IsBoolean()
+  enabled?: boolean;
 }
 
 export class UpdateModulePricesDto {
