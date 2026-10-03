@@ -119,6 +119,26 @@ export function computeOpeningStatus(
   };
 }
 
+/**
+ * Instants absolus de fermeture et de prochaine ouverture.
+ *
+ * `closesInMinutes` est une duree relative a l'instant du calcul : un client
+ * qui l'additionne a sa propre horloge au moment de l'affichage obtient
+ * « Ferme a 02:01 » pour une fermeture a 02:00. L'instant absolu, lui, reste
+ * exact quel que soit le delai d'affichage et le fuseau du telephone.
+ */
+export function openingInstants(
+  now: Date,
+  status: Pick<OpeningStatus, 'closesInMinutes' | 'opensInMinutes'>,
+): { closesAt: string | null; opensAt: string | null } {
+  // Le calcul d'ouverture raisonne en minutes entieres depuis minuit.
+  const minuteStart = Math.floor(now.getTime() / 60_000) * 60_000;
+  const at = (minutes: number | null): string | null =>
+    minutes === null ? null : new Date(minuteStart + minutes * 60_000).toISOString();
+
+  return { closesAt: at(status.closesInMinutes), opensAt: at(status.opensInMinutes) };
+}
+
 function previousWeekDay(day: WeekDayCode): WeekDayCode {
   const index = WEEK_DAYS.indexOf(day);
   const previousIndex = (index + WEEK_DAYS.length - 1) % WEEK_DAYS.length;

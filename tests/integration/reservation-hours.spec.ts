@@ -117,6 +117,49 @@ describe('reservations et horaires d ouverture', () => {
     expect(schedule.slots.every((slot) => new Date(slot).getTime() > Date.now())).toBe(true);
   });
 
+  it('publie la fermeture exacte et le fuseau du restaurant dans la decouverte', async () => {
+    // Ouvert chaque jour de 00:00 a 02:00 le lendemain : toujours ouvert, ferme a 02:00.
+    await context
+      .http()
+      .put(`/api/v1/merchant/establishments/${establishmentId}/hours`)
+      .set('Authorization', `Bearer ${merchantToken}`)
+      .send({
+        slots: ['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY', 'SUNDAY'].map(
+          (weekDay) => ({
+            weekDay,
+            opensAtMinutes: 0,
+            closesAtMinutes: 1560,
+          }),
+        ),
+      })
+      .expect(204);
+
+    const listed = await context.http().get('/api/v1/discovery/restaurants').expect(200);
+    const summary = payloadOf<
+      Array<{
+        id: string;
+        slug: string;
+        open: boolean;
+        closesAt: string | null;
+        opensAt: string | null;
+        timezone: string;
+      }>
+    >(listed.body).find((item) => item.id === establishmentId);
+
+    expect(summary).toMatchObject({ open: true, opensAt: null, timezone: 'Africa/Abidjan' });
+    // Abidjan est a UTC+0 : 02:00 locale vaut 02:00 UTC, sans minute parasite.
+    expect(summary?.closesAt).toMatch(/T02:00:00\.000Z$/);
+
+    const detail = await context
+      .http()
+      .get(`/api/v1/restaurants/${summary?.slug ?? ''}`)
+      .expect(200);
+    expect(payloadOf<{ closesAt: string | null; timezone: string }>(detail.body)).toMatchObject({
+      closesAt: summary?.closesAt,
+      timezone: 'Africa/Abidjan',
+    });
+  });
+
   it('laisse passer la demande tant que le restaurant n a saisi aucun horaire', async () => {
     await reserve(nextWednesdayAt(3)).expect(201);
 

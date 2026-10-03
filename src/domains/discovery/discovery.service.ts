@@ -1,13 +1,18 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma } from '../../infrastructure/prisma/generated/client';
 import { PrismaService } from '../../infrastructure/prisma/prisma.service';
-import { Clock } from '../../common/time/clock';
+import { Clock, DISPLAY_TIME_ZONE } from '../../common/time/clock';
 import { DomainError } from '../../common/errors/domain.error';
 import { toMoneyView, type MoneyView } from '../../common/money/money';
 import { buildPage, decodeCursor, normalizePageSize, type PageResult } from '../../common/pagination/cursor';
 import { EntitlementsService } from '../entitlements/entitlements.service';
 import { filterServicesByModules, toPublicModules } from '../entitlements/module-codes';
-import { computeOpeningStatus, type HoursException, type HoursSlot } from '../organizations/opening-hours';
+import {
+  computeOpeningStatus,
+  openingInstants,
+  type HoursException,
+  type HoursSlot,
+} from '../organizations/opening-hours';
 import type { DiscoverRestaurantsQuery } from './dto/discovery.dto';
 
 export interface RestaurantSummary {
@@ -26,6 +31,11 @@ export interface RestaurantSummary {
   open: boolean;
   closesInMinutes: number | null;
   opensInMinutes: number | null;
+  /** Instants ISO 8601 exacts, a formater dans `timezone`. */
+  closesAt: string | null;
+  opensAt: string | null;
+  /** Fuseau du restaurant : les horaires s'affichent a son heure, pas a celle du telephone. */
+  timezone: string;
   priceFrom: MoneyView | null;
   isFavorite: boolean;
   enabledModules: string[];
@@ -35,7 +45,6 @@ export interface RestaurantSummary {
 }
 
 export interface RestaurantDetail extends RestaurantSummary {
-  timezone: string;
   description: string | null;
   phoneE164: string | null;
   addressLine: string | null;
@@ -149,6 +158,8 @@ export class DiscoveryService {
       const enabledModules = modulesByEstablishment.get(row.id) ?? [];
       return this.toSummary(row, {
         opening,
+        now,
+        timezone: openingData.timezones.get(row.id) ?? DISPLAY_TIME_ZONE,
         services: filterServicesByModules(servicesByEstablishment.get(row.id) ?? [], enabledModules),
         enabledModules: toPublicModules(enabledModules),
         isFavorite: favorites.has(row.id),
@@ -304,6 +315,7 @@ export class DiscoveryService {
       open: opening.open,
       closesInMinutes: opening.closesInMinutes,
       opensInMinutes: opening.opensInMinutes,
+      ...openingInstants(now, opening),
       priceFrom: priceFrom === null ? null : toMoneyView(priceFrom),
       isFavorite,
       hasTerrace: Boolean(amenity?.has_terrace),
@@ -420,6 +432,8 @@ export class DiscoveryService {
         },
         {
           opening,
+          now,
+          timezone: openingData.timezones.get(establishment.id) ?? DISPLAY_TIME_ZONE,
           services: filterServicesByModules(
             services.get(establishment.id) ?? [],
             modulesByEstablishment.get(establishment.id) ?? [],
@@ -755,6 +769,8 @@ export class DiscoveryService {
     },
     context: {
       opening: ReturnType<typeof computeOpeningStatus>;
+      now: Date;
+      timezone: string;
       services: string[];
       enabledModules: string[];
       isFavorite: boolean;
@@ -776,6 +792,8 @@ export class DiscoveryService {
       open: context.opening.open,
       closesInMinutes: context.opening.closesInMinutes,
       opensInMinutes: context.opening.opensInMinutes,
+      ...openingInstants(context.now, context.opening),
+      timezone: context.timezone,
       priceFrom: row.priceFrom === null ? null : toMoneyView(row.priceFrom),
       isFavorite: context.isFavorite,
       enabledModules: context.enabledModules,

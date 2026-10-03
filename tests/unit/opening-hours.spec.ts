@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   computeOpeningStatus,
   findOverlappingSlots,
+  openingInstants,
   type HoursException,
   type HoursSlot,
 } from '../../src/domains/organizations/opening-hours';
@@ -126,5 +127,28 @@ describe('findOverlappingSlots', () => {
     ];
 
     expect(findOverlappingSlots(slots)).toHaveLength(0);
+  });
+});
+
+describe('openingInstants', () => {
+  it('donne la fermeture exacte, quel que soit le delai avant affichage', () => {
+    // 23:10:42 a Abidjan, service du samedi jusqu a 02:00 : 170 minutes restantes.
+    const now = new Date('2026-10-03T23:10:42.500Z');
+    expect(openingInstants(now, { closesInMinutes: 170, opensInMinutes: null })).toEqual({
+      closesAt: '2026-10-04T02:00:00.000Z',
+      opensAt: null,
+    });
+  });
+
+  it('donne la prochaine ouverture et laisse vide ce qui est inconnu', () => {
+    const now = new Date('2026-10-05T09:15:59.999Z');
+    expect(openingInstants(now, { closesInMinutes: null, opensInMinutes: 105 })).toEqual({
+      closesAt: null,
+      opensAt: '2026-10-05T11:00:00.000Z',
+    });
+    expect(openingInstants(now, { closesInMinutes: null, opensInMinutes: null })).toEqual({
+      closesAt: null,
+      opensAt: null,
+    });
   });
 });
