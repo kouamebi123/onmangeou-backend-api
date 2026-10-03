@@ -3,7 +3,12 @@ import { computeOpeningStatus, type HoursSlot, type HoursException } from '../or
 import { localDateKey, localTimeToUtc, weekDayInDisplayZone } from '../../common/time/clock';
 
 // An exceptional schedule also replaces the previous day's overnight service.
-function openAt(instant: Date, hours: HoursSlot[], exceptions: HoursException[], timezone: string) {
+export function isOpenAt(
+  instant: Date,
+  hours: readonly HoursSlot[],
+  exceptions: readonly HoursException[],
+  timezone: string,
+): boolean {
   const previousDay = new Date(localTimeToUtc(localDateKey(instant, timezone), 0, timezone).getTime() - 1);
   const previousException = exceptions.find((e) => e.dateKey === localDateKey(previousDay, timezone));
   if (!previousException) return computeOpeningStatus(instant, hours, exceptions, timezone).open;
@@ -33,7 +38,7 @@ export function orderSchedule(now: Date, hours: HoursSlot[], exceptions: HoursEx
     time <= now.getTime() + SCHEDULE_HORIZON_MS;
     time += step
   ) {
-    if (openAt(new Date(time), hours, exceptions, timezone)) slots.push(new Date(time).toISOString());
+    if (isOpenAt(new Date(time), hours, exceptions, timezone)) slots.push(new Date(time).toISOString());
   }
-  return { timezone, asapAvailable: openAt(now, hours, exceptions, timezone), slots };
+  return { timezone, asapAvailable: isOpenAt(now, hours, exceptions, timezone), slots };
 }

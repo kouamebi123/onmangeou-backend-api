@@ -13,6 +13,8 @@ import { EntitlementsService } from '../entitlements/entitlements.service';
 import { MODULE_CODES, type ModuleCode } from '../entitlements/module-codes';
 import { notifyUser } from './notify';
 import { canChangeReservationStatus } from './reservation-rules';
+import { reservationAllowedAt, reservationSchedule } from './reservation-schedule';
+import type { HoursException } from '../organizations/opening-hours';
 import { availableTableQuery } from './reservation-allocation';
 import { canAdvanceDelivery } from './delivery-rules';
 import { priceCoupon } from './coupon-pricing';
@@ -38,6 +40,22 @@ import type {
 } from './commerce.dto';
 
 const SANDBOX_SECRET = process.env.PAYMENTS_SANDBOX_SECRET;
+
+function toHoursExceptions(
+  rows: ReadonlyArray<{
+    exceptionDate: Date;
+    closed: boolean;
+    opensAtMinutes: number | null;
+    closesAtMinutes: number | null;
+  }>,
+): HoursException[] {
+  return rows.map((row) => ({
+    dateKey: row.exceptionDate.toISOString().slice(0, 10),
+    closed: row.closed,
+    opensAtMinutes: row.opensAtMinutes,
+    closesAtMinutes: row.closesAtMinutes,
+  }));
+}
 
 function sqlAmount(value: unknown, label: string): bigint {
   if (value === null || value === undefined) {
@@ -339,10 +357,33 @@ export class CommerceService {
     return { following: on };
   }
 
+  async reservationSlots(establishmentId: string) {
+    const establishment = await this.prisma.establishment.findFirst({
+      where: { id: establishmentId, deletedAt: null, status: 'PUBLISHED' },
+      select: { timezone: true, hours: true, hoursExceptions: true },
+    });
+    if (!establishment) {
+      throw notFound('Etablissement', establishmentId);
+    }
+    return reservationSchedule(
+      this.clock.now(),
+      establishment.hours,
+      toHoursExceptions(establishment.hoursExceptions),
+      establishment.timezone,
+    );
+  }
+
   async createReservation(actor: AuthenticatedActor, dto: CreateReservationDto) {
     const establishment = await this.prisma.establishment.findFirst({
       where: { id: dto.establishmentId, deletedAt: null, status: 'PUBLISHED' },
-      select: { id: true, organizationId: true, name: true },
+      select: {
+        id: true,
+        organizationId: true,
+        name: true,
+        timezone: true,
+        hours: true,
+        hoursExceptions: true,
+      },
     });
     if (!establishment) {
       throw notFound('Etablissement', dto.establishmentId);
@@ -357,6 +398,23 @@ export class CommerceService {
       throw validationFailed([
         { field: 'startsAt', code: 'invalid', message: 'La date de réservation est passée' },
       ]);
+    }
+    if (
+      !reservationAllowedAt(
+        startsAt,
+        establishment.hours,
+        toHoursExceptions(establishment.hoursExceptions),
+        establishment.timezone,
+      )
+    ) {
+      // Le detail public porte l'explication : les applications affichent ce
+      // champ tel quel, sans relire la liste `fields`.
+      const closedMessage =
+        'Le restaurant est fermé à cette date et à cette heure. Choisissez un horaire d’ouverture.';
+      throw new DomainError('VALIDATION_FAILED', 'Reservation demandee hors horaires', {
+        publicDetail: closedMessage,
+        fields: [{ field: 'startsAt', code: 'closed', message: closedMessage }],
+      });
     }
     const user = await this.prisma.user.findUnique({
       where: { id: actor.userId },

@@ -79,6 +79,17 @@ export class CommerceController {
     return this.commerce.follow(actor, id, false);
   }
 
+  @Get('restaurants/:id/reservation-slots')
+  @PublicRoute()
+  @ApiOperation({
+    summary: 'Créneaux de réservation proposables',
+    description:
+      'Quarts d’heure à venir pendant les horaires d’ouverture, sur trente jours. Sans horaires saisis, `hoursConfigured` vaut false et aucun créneau n’est imposé.',
+  })
+  async reservationSlots(@Param('id', ParseUUIDPipe) id: string) {
+    return this.commerce.reservationSlots(id);
+  }
+
   @Post('reservations')
   @Idempotent({ scope: 'reservations.create' })
   async reserve(@CurrentActor() actor: AuthenticatedActor, @Body() dto: CreateReservationDto) {
