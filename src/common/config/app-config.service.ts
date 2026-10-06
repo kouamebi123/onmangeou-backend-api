@@ -100,6 +100,11 @@ export class AppConfigService {
     };
   }
 
+  /** Absent : aucun compte du personnel ne recoit de code en clair. */
+  get staffAccessCode(): string | undefined {
+    return this.get('STAFF_ACCESS_CODE');
+  }
+
   get smsProvider(): string {
     return this.get('SMS_PROVIDER');
   }

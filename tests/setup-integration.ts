@@ -24,6 +24,8 @@ process.env['JWT_ISSUER'] ??= 'https://api.test.onmangeou.ci';
 process.env['JWT_AUDIENCE'] ??= 'onmangeou-tests';
 process.env['OTP_PEPPER'] ??= randomBytes(32).toString('hex');
 process.env['OTP_DEV_ECHO_CODE'] ??= 'true';
+// Second facteur du personnel : valeur de test, jamais utilisee ailleurs.
+process.env['STAFF_ACCESS_CODE'] ??= 'code-acces-personnel-de-test';
 
 if (process.env['JWT_PRIVATE_KEY'] === undefined || process.env['JWT_PUBLIC_KEY'] === undefined) {
   const { privateKey, publicKey } = generateKeyPairSync('ec', { namedCurve: 'P-256' });

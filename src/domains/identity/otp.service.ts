@@ -17,6 +17,8 @@ export interface RequestOtpInput {
   purpose: OtpPurpose;
   ipTruncated?: string;
   deviceInstallId?: string;
+  /** Vrai : le code n'est jamais renvoye dans la reponse, meme en developpement. */
+  suppressDevCode?: boolean;
 }
 
 export interface RequestOtpResult {
@@ -109,7 +111,7 @@ export class OtpService {
     return {
       challengeId: challenge.id,
       expiresAt: challenge.expiresAt,
-      ...(devEchoCode ? { devCode: code } : {}),
+      ...(devEchoCode && input.suppressDevCode !== true ? { devCode: code } : {}),
     };
   }
 

@@ -217,6 +217,17 @@ export class EnvironmentSchema {
   @IsBoolean()
   OTP_DEV_ECHO_CODE = false;
 
+  /**
+   * Second facteur du personnel de la plateforme (specification section 22).
+   *
+   * Le telephone seul ne suffit pas pour un compte interne : celui qui connait
+   * le numero d'un administrateur ne doit pas pouvoir ouvrir le back-office.
+   */
+  @IsOptional()
+  @IsString()
+  @MinLength(16)
+  STAFF_ACCESS_CODE?: string;
+
   @IsString()
   @IsNotEmpty()
   PAYMENT_PROVIDER = 'sandbox';
@@ -311,6 +322,10 @@ function assertProductionSafety(config: EnvironmentSchema): void {
 
   if (!config.PAYMENT_WEBHOOK_SECRET) {
     violations.push('PAYMENT_WEBHOOK_SECRET est obligatoire pour verifier les signatures');
+  }
+
+  if (!config.STAFF_ACCESS_CODE) {
+    violations.push('STAFF_ACCESS_CODE est obligatoire pour proteger les comptes du personnel');
   }
 
   if (config.CORS_ALLOWED_ORIGINS.length === 0) {

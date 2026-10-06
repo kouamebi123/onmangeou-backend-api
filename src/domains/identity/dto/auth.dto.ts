@@ -39,6 +39,14 @@ export class RequestOtpDto {
   @IsOptional()
   @IsIn(['LOGIN', 'PHONE_VERIFICATION'])
   purpose?: 'LOGIN' | 'PHONE_VERIFICATION';
+
+  @ApiPropertyOptional({
+    description: "Code d'acces du personnel. Requis uniquement pour un compte interne de la plateforme.",
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(128)
+  staffAccessCode?: string;
 }
 
 export class DeviceInfoDto {
@@ -105,6 +113,14 @@ export class VerifyOtpDto {
   @ApiPropertyOptional({ type: DeviceInfoDto })
   @IsOptional()
   device?: DeviceInfoDto;
+
+  @ApiPropertyOptional({
+    description: "Code d'acces du personnel. Requis uniquement pour un compte interne de la plateforme.",
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(128)
+  staffAccessCode?: string;
 }
 
 export class RefreshTokenDto {

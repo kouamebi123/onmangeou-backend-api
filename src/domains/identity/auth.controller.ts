@@ -3,6 +3,7 @@ import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { CurrentActor, PublicRoute } from '../../common/auth/auth.decorators';
 import type { AuthenticatedActor } from '../../common/auth/authenticated-actor';
 import { RateLimit } from '../../common/rate-limit/rate-limit.decorator';
+import { DomainError } from '../../common/errors/domain.error';
 import { truncateIp, type AppRequest } from '../../common/http/request-context';
 import { AuditService, AUDIT_ACTIONS } from '../audit/audit.service';
 import { OutboxService, OUTBOX_EVENTS } from '../../infrastructure/outbox/outbox.service';
@@ -23,6 +24,7 @@ import {
 import { IdentityService } from './identity.service';
 import { OtpService } from './otp.service';
 import { SessionService } from './session.service';
+import { StaffAccessService } from './staff-access.service';
 
 /**
  * Authentification par telephone et code a usage unique.
@@ -40,6 +42,7 @@ export class AuthController {
     private readonly identity: IdentityService,
     private readonly otp: OtpService,
     private readonly sessions: SessionService,
+    private readonly staffAccess: StaffAccessService,
     private readonly audit: AuditService,
     private readonly outbox: OutboxService,
   ) {}
@@ -60,9 +63,15 @@ export class AuthController {
     const phoneE164 = this.identity.normalizePhone(dto.phone);
     const ipTruncated = truncateIp(request.ip);
 
+    // Le code d'un compte du personnel ne sort jamais en clair sans le code
+    // d'acces : sinon connaitre le numero d'un administrateur suffirait.
+    const staffWithoutAccessCode =
+      !this.staffAccess.matches(dto.staffAccessCode) && (await this.staffAccess.isStaffPhone(phoneE164));
+
     const result = await this.otp.request({
       destination: phoneE164,
       purpose: dto.purpose ?? 'LOGIN',
+      suppressDevCode: staffWithoutAccessCode,
       ...(ipTruncated === undefined ? {} : { ipTruncated }),
       ...(request.deviceInstallId === undefined ? {} : { deviceInstallId: request.deviceInstallId }),
     });
@@ -113,6 +122,25 @@ export class AuthController {
         ...(ipTruncated === undefined ? {} : { ipTruncated }),
       });
       throw error;
+    }
+
+    // Verifie apres le code SMS : seul celui qui detient deja ce code apprend
+    // qu'un second facteur protege le compte.
+    if (
+      this.staffAccess.configured &&
+      !this.staffAccess.matches(dto.staffAccessCode) &&
+      (await this.staffAccess.isStaffPhone(phoneE164))
+    ) {
+      await this.audit.record({
+        action: AUDIT_ACTIONS.AUTH_OTP_FAILED,
+        resourceType: 'otp_challenge',
+        requestId: request.requestId,
+        reason: "Code d'acces du personnel absent ou incorrect",
+        ...(ipTruncated === undefined ? {} : { ipTruncated }),
+      });
+      throw new DomainError('FORBIDDEN', "Code d'acces du personnel absent ou incorrect", {
+        publicDetail: 'Ce compte est protégé : saisissez le code d’accès du personnel pour vous connecter.',
+      });
     }
 
     const { userId, created } = await this.identity.findOrCreateByVerifiedPhone({

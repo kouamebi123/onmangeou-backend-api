@@ -11,6 +11,7 @@ import { AuthController, MeController } from './auth.controller';
 import { IdentityService } from './identity.service';
 import { OtpService } from './otp.service';
 import { SessionService } from './session.service';
+import { StaffAccessService } from './staff-access.service';
 
 @Module({
   imports: [JwtModule.register({})],
@@ -19,6 +20,7 @@ import { SessionService } from './session.service';
     IdentityService,
     OtpService,
     SessionService,
+    StaffAccessService,
     TokenService,
     ActorResolverService,
     {
