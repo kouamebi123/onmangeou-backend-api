@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../infrastructure/prisma/prisma.service';
+import { AppConfigService } from '../config/app-config.service';
 import { DomainError } from '../errors/domain.error';
 import { Clock } from '../time/clock';
 import type { AuthenticatedActor } from './authenticated-actor';
@@ -21,6 +22,7 @@ export class ActorResolverService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly clock: Clock,
+    private readonly config: AppConfigService,
   ) {}
 
   async resolve(claims: AccessTokenClaims, deviceInstallId?: string): Promise<AuthenticatedActor> {
@@ -32,6 +34,7 @@ export class ActorResolverService {
         revokedAt: true,
         expiresAt: true,
         mfaSatisfiedAt: true,
+        staffAccessVerifiedAt: true,
         user: { select: { status: true } },
       },
     });
@@ -61,7 +64,11 @@ export class ActorResolverService {
       ...(deviceInstallId === undefined ? {} : { deviceInstallId }),
     };
 
-    const withStaff = await this.withPlatformStaff(actor);
+    // Quand un code d'acces du personnel est exige, seule une session ouverte
+    // avec ce code porte les permissions de plateforme. Une session plus
+    // ancienne, ou ouverte avant l'attribution du role, reste une session ordinaire.
+    const staffAllowed = this.config.staffAccessCode === undefined || session.staffAccessVerifiedAt !== null;
+    const withStaff = staffAllowed ? await this.withPlatformStaff(actor) : actor;
 
     if (claims.org === undefined) {
       return withStaff;

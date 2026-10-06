@@ -68,6 +68,18 @@ export class AuthController {
     const staffWithoutAccessCode =
       !this.staffAccess.matches(dto.staffAccessCode) && (await this.staffAccess.isStaffPhone(phoneE164));
 
+    // Un code d'acces errone presente pour un compte du personnel est une
+    // tentative a tracer : c'est le seul endroit ou il peut etre devine.
+    if (staffWithoutAccessCode && dto.staffAccessCode !== undefined) {
+      await this.audit.record({
+        action: AUDIT_ACTIONS.AUTH_OTP_FAILED,
+        resourceType: 'otp_challenge',
+        requestId: request.requestId,
+        reason: "Code d'acces du personnel incorrect a la demande de code",
+        ...(ipTruncated === undefined ? {} : { ipTruncated }),
+      });
+    }
+
     const result = await this.otp.request({
       destination: phoneE164,
       purpose: dto.purpose ?? 'LOGIN',
@@ -124,8 +136,8 @@ export class AuthController {
       throw error;
     }
 
-    // Verifie apres le code SMS : seul celui qui detient deja ce code apprend
-    // qu'un second facteur protege le compte.
+    // Verifie apres le code SMS : le refus n'est donc visible que de celui qui
+    // detient deja ce code.
     if (
       this.staffAccess.configured &&
       !this.staffAccess.matches(dto.staffAccessCode) &&
@@ -160,6 +172,7 @@ export class AuthController {
     const tokens = await this.sessions.create({
       userId,
       strongAuthentication: true,
+      staffAccessVerified: this.staffAccess.matches(dto.staffAccessCode),
       ...(dto.organizationId === undefined ? {} : { organizationId: dto.organizationId }),
       ...(deviceId === undefined ? {} : { deviceId }),
       ...(userAgent === undefined ? {} : { userAgent }),
@@ -222,7 +235,11 @@ export class AuthController {
     @CurrentActor() actor: AuthenticatedActor,
     @Req() request: AppRequest,
   ): Promise<void> {
-    await this.sessions.revoke(actor.sessionId, dto.allDevices === true ? 'logout_all' : 'logout');
+    if (dto.allDevices === true) {
+      await this.sessions.revokeAllForUser(actor.userId, 'logout_all');
+    } else {
+      await this.sessions.revoke(actor.sessionId, 'logout');
+    }
 
     await this.audit.recordForActor(actor, {
       action: AUDIT_ACTIONS.AUTH_SESSION_REVOKED,

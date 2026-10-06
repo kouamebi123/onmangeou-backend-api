@@ -51,11 +51,24 @@ export function idempotencyKey(): string {
 /** Parcours complet de connexion : demande de code puis verification. */
 export async function authenticate(
   context: TestContext,
-  options: { phone?: string; organizationId?: string; installId?: string } = {},
+  options: {
+    phone?: string;
+    organizationId?: string;
+    installId?: string;
+    /** Faux pour ouvrir une session sans le code d'acces du personnel. */
+    staffAccess?: boolean;
+  } = {},
 ): Promise<AuthenticatedUser> {
   const phone = options.phone ?? nextPhone();
+  // Par defaut les essais se connectent comme le personnel : avec le code d'acces.
+  const staffAccessCode = options.staffAccess === false ? undefined : process.env['STAFF_ACCESS_CODE'];
+  const staffAccess = staffAccessCode === undefined ? {} : { staffAccessCode };
 
-  const requested = await context.http().post('/api/v1/auth/otp/request').send({ phone }).expect(202);
+  const requested = await context
+    .http()
+    .post('/api/v1/auth/otp/request')
+    .send({ phone, ...staffAccess })
+    .expect(202);
 
   const challenge = payloadOf<{ devCode?: string }>(requested.body);
 
@@ -71,6 +84,7 @@ export async function authenticate(
     .send({
       phone,
       code: challenge.devCode,
+      ...staffAccess,
       ...(options.organizationId === undefined ? {} : { organizationId: options.organizationId }),
       ...(options.installId === undefined
         ? {}

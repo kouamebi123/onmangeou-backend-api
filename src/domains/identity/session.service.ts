@@ -26,6 +26,8 @@ export interface CreateSessionInput {
   requestId?: string;
   /** Vrai lorsqu'un facteur fort vient d'etre verifie (OTP, MFA). */
   strongAuthentication: boolean;
+  /** Vrai lorsque le code d'acces du personnel vient d'etre presente. */
+  staffAccessVerified?: boolean;
 }
 
 /**
@@ -68,6 +70,7 @@ export class SessionService {
         userAgent: input.userAgent?.slice(0, 512) ?? null,
         ipTruncated: input.ipTruncated ?? null,
         mfaSatisfiedAt: input.strongAuthentication ? this.clock.now() : null,
+        staffAccessVerifiedAt: input.staffAccessVerified === true ? this.clock.now() : null,
       },
       select: { id: true, expiresAt: true, mfaSatisfiedAt: true },
     });
@@ -107,6 +110,7 @@ export class SessionService {
         deviceId: true,
         userAgent: true,
         mfaSatisfiedAt: true,
+        staffAccessVerifiedAt: true,
         replacedById: true,
       },
     });
@@ -161,6 +165,9 @@ export class SessionService {
           userAgent: existing.userAgent,
           ipTruncated: input.ipTruncated ?? null,
           mfaSatisfiedAt: existing.mfaSatisfiedAt,
+          // La preuve suit la session : une session ouverte sans le code d'acces
+          // ne l'acquiert jamais par simple renouvellement.
+          staffAccessVerifiedAt: existing.staffAccessVerifiedAt,
         },
         select: { id: true, expiresAt: true, mfaSatisfiedAt: true },
       });
@@ -188,6 +195,15 @@ export class SessionService {
       where: { id: sessionId, revokedAt: null },
       data: { revokedAt: this.clock.now(), revokedCause: cause },
     });
+  }
+
+  /** Ferme toutes les sessions ouvertes d'un utilisateur, sur tous ses appareils. */
+  async revokeAllForUser(userId: string, cause: string): Promise<number> {
+    const result = await this.prisma.session.updateMany({
+      where: { userId, revokedAt: null },
+      data: { revokedAt: this.clock.now(), revokedCause: cause },
+    });
+    return result.count;
   }
 
   async revokeFamily(familyId: string, cause: string): Promise<void> {

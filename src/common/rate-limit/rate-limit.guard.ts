@@ -7,6 +7,7 @@ import type { AppRequest } from '../http/request-context';
 import { APP_LOGGER, type AppLogger } from '../logging/app-logger';
 import { RedisService } from '../../infrastructure/redis/redis.service';
 import { RATE_LIMIT_METADATA, type RateLimitOptions, type RateLimitRule } from './rate-limit.decorator';
+import { normalizeIvorianPhone } from '../identity/phone';
 
 /**
  * Limitation de debit adossee a Redis (specification section 10.1).
@@ -123,12 +124,25 @@ function readDestination(request: AppRequest): string | undefined {
   const body = request.body as { phone?: unknown; destination?: unknown } | undefined;
 
   if (typeof body?.phone === 'string') {
-    return body.phone;
+    return canonicalDestination(body.phone);
   }
   if (typeof body?.destination === 'string') {
-    return body.destination;
+    return canonicalDestination(body.destination);
   }
   return undefined;
+}
+
+/**
+ * Meme numero, meme compteur : `0701020304`, `07 01 02 03 04` et
+ * `+2250701020304` designent une seule destination. Sans cela, varier
+ * l'ecriture du numero contournait la limite par destination.
+ */
+export function canonicalDestination(raw: string): string {
+  try {
+    return normalizeIvorianPhone(raw).e164;
+  } catch {
+    return raw.replace(/\s/g, '').toLowerCase();
+  }
 }
 
 function formatDelay(seconds: number): string {

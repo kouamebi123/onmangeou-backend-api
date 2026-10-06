@@ -323,6 +323,9 @@ model Session {
   userAgent      String? @map("user_agent") @db.VarChar(512)
   ipTruncated    String? @map("ip_truncated") @db.VarChar(45)
   mfaSatisfiedAt DateTime? @map("mfa_satisfied_at") @db.Timestamptz(3)
+  /// Renseigne quand la session a ete ouverte avec le code d'acces du personnel.
+  /// Sans cette preuve, la session n'obtient aucune permission de plateforme.
+  staffAccessVerifiedAt DateTime? @map("staff_access_verified_at") @db.Timestamptz(3)
 
   expiresAt    DateTime  @map("expires_at") @db.Timestamptz(3)
   lastUsedAt   DateTime? @map("last_used_at") @db.Timestamptz(3)
